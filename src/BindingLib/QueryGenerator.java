@@ -15,29 +15,26 @@ enum QueryType{
     delete
 }
 //TODO: Возможно стоит добавить интерфейс, требующий реализации generateProcedureName
-//TODO: Может стоит использовать изменяемые строки?
-//TODO: Возможно лучше возвращать String, а не List<String>
-//TODO: Возможно лучше генерировать запросы с незаполнеными параметрами или даже prepareStatement
+//TODO: Возможно лучше возвращать StringBuilder, а не List<StringBuilder>
+//TODO: Генерировать запросы с незаполнеными параметрами
 //TODO: Подумать над порядком параметов
-//TODO: Нужно возвращать ошибку в случае case default
-//TODO: Заменить Dictionary, он устарел
 //TODO: Использование map of maps неэффективно
-//TODO: Рассмотреть варианты реализации createDelete
+//TODO: createDelete реализовать вариант через IN (array)
 //TODO: Реализовать кэш для коллекций
 public class QueryGenerator  {
     private UserContext context;
-    private Dictionary<EntityBinding, String> selectCache;
-    private Map<EntityBinding, Map<Object, String>> selectByIdCache;
-    private Map<EntityBinding, Map<Object, String>> updateCache;
-    private Dictionary<EntityBinding, List<String>> updateBatchCache;
-    private Dictionary<EntityBinding, Map<Object, String>> deleteCache;
-    private Dictionary<EntityBinding, List<String>> deleteBatchCache;
-    private Dictionary<EntityBinding, Map<Object, String>> insertCache;
-    private Dictionary<EntityBinding, List<String>> insertBatchCache;
+    private Map<EntityBinding, String> selectAllCache;
+    private Map<EntityBinding, String> selectByIdCache;
+    private Map<EntityBinding, String> updateCache;
+    private Map<EntityBinding, String> updateBatchCache;
+    private Map<EntityBinding, String> deleteCache;
+    private Map<EntityBinding, String> deleteBatchCache;
+    private Map<EntityBinding, String> insertCache;
+    private Map<EntityBinding, String> insertBatchCache;
 
     public QueryGenerator(UserContext context) {
         this.context = context;
-        this.selectCache = new Hashtable<>();
+        this.selectAllCache = new Hashtable<>();
         this.selectByIdCache = new Hashtable<>();
         this.updateCache = new Hashtable<>();
         this.updateBatchCache = new Hashtable<>();
@@ -47,248 +44,272 @@ public class QueryGenerator  {
         this.insertBatchCache = new Hashtable<>();
     }
 
-    public String createSelect(EntityBinding entityBinding) {
+    public String createSelectAll(EntityBinding entityBinding) {
 
-        String query = selectCache.get(entityBinding);
-        if (query != null) return query;
+        String savedQuery = selectAllCache.get(entityBinding);
+        if (savedQuery != null) return savedQuery.toString();
 
-        query = "select ";
+        StringBuilder query = new StringBuilder(40);
         Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
 
-        while(iterator.hasNext()) query += ( iterator.next().getColumnName() + " ");
+        while(iterator.hasNext()) query.append(iterator.next().getColumnName()).append(" ");
 
         switch (entityBinding.getBindingType()){
-
             case Table:
-                query += ("from " + entityBinding.getTableName());
+                query.append("from ").append(entityBinding.getTableName());
                 break;
 
             case StoredProcedure:
-                String fromStatement =
-                        "from table(" +
-                        generateNameProcedure(QueryType.select, entityBinding.getPackageName()) +
-                        ")";
-                break;
-
-            default:
-                throw new NotImplementedException();
-        }
-        selectCache.put(entityBinding, query);
-        return query;
-    }
-
-    public String createSelectById(EntityBinding entityBinding, Object id) {
-
-        String query;
-        Map<Object, String> idStringCache = selectByIdCache.get(entityBinding);
-        if (idStringCache == null) idStringCache = new Hashtable<>();
-        else {
-            query = idStringCache.get(id);
-            if (query != null) return query;
-        }
-
-        query =  createSelect(entityBinding);
-
-        switch (entityBinding.getBindingType()){
-
-            case Table:
-                String whereStatement = " where " +
-                        entityBinding.getIdentifier().getColumnName() + " = " + id.toString();
-
-                query += whereStatement;
-                break;
-
-            case StoredProcedure:
-                query = query.replace("()", "(" + id.toString() + ")");
+                query.append("from table(")
+                     .append(
+                             generateNameProcedure(QueryType.select, entityBinding.getPackageName())
+                     )
+                     .append(")");
                 break;
 
             default:
                 throw new NotImplementedException();
         }
 
-        idStringCache.put(id, query);
-        selectByIdCache.put(entityBinding, idStringCache);
-
-        return  query;
+        selectAllCache.put(entityBinding, query.toString());
+        return query.toString();
     }
 
-    public String createUpdate(EntityBinding entityBinding, Object entity) {
+    public String createSelectById(EntityBinding entityBinding) {
 
-        String query;
+        String savedQuery = selectByIdCache.get(entityBinding);
+        if (savedQuery != null) return savedQuery;
 
-        Map<Object, String> idStringCache = updateCache.get(entityBinding);
-        if (idStringCache == null) idStringCache = new Hashtable<>();
-        else {
-            query = idStringCache.get(entity);
-            if (query != null) return query;
+        StringBuilder query = new StringBuilder(createSelectAll(entityBinding));
+        PropertyBinding identifier = entityBinding.getIdentifier();
+
+        switch (entityBinding.getBindingType()){
+            case Table:
+                query.append(" where ")
+                     .append(identifier.getColumnName())
+                     .append("=:")
+                     .append(identifier.getFieldName());
+                break;
+
+            case StoredProcedure:
+                int index = query.indexOf("()");
+                if(index != -1) query.insert(index + 1, ":" + identifier.getFieldName());
+                else {
+                    index = query.indexOf(")");
+                    query.insert(index, ":" + identifier.getFieldName());
+                }
+                break;
+
+            default:
+                throw new NotImplementedException();
         }
+
+        selectByIdCache.put(entityBinding, query.toString());
+        return  query.toString();
+    }
+
+    public String createUpdate(EntityBinding entityBinding) {
+
+        String savedQuery = updateCache.get(entityBinding);
+        if (savedQuery != null) return savedQuery;
+
+        StringBuilder query = new StringBuilder(40);
 
         PropertyBinding property;
         PropertyBinding identifier = entityBinding.getIdentifier();
-        Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
 
         switch (entityBinding.getBindingType()){
-
             case Table:
+                Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
 
-                query = "update " + entityBinding.getTableName() + " set ";
+                query.append("update ")
+                     .append(entityBinding.getTableName())
+                     .append(" set ");
+
+                property = iterator.next();
+                if( property != identifier) {
+                    query.append(property.getColumnName())
+                         .append("=:")
+                         .append(property.getFieldName());
+                }
 
                 while (iterator.hasNext()){
                     property = iterator.next();
-                    query += (property.getColumnName() + "=" + property.getFieldValue(entity) + " ");
+                    if( property != identifier) {
+                        query.append(", ")
+                                .append(property.getColumnName())
+                                .append("=:")
+                                .append(property.getFieldName());
+                    }
                 }
 
-                query += ("where " + identifier.getColumnName() + "=" + identifier.getFieldValue(entity) );
+                query.append(" where ")
+                     .append(identifier.getColumnName())
+                     .append("=:")
+                     .append(identifier.getFieldName());
                 break;
 
             case StoredProcedure:
 
-                String parameters = "(";
+                query.append("{call ")
+                     .append(
+                             generateNameProcedure(QueryType.update, entityBinding.getPackageName())
+                     )
+                     .append("}");
 
-                query = "{call " + generateNameProcedure(QueryType.update, entityBinding.getPackageName()) + "}";
+                int index = query.indexOf("()") + 1;
+                query.insert(index, "?)");
 
-                parameters += iterator.next().getFieldValue(entity);
-                while (iterator.hasNext()) parameters += (", " + iterator.next().getFieldValue(entity));
-
-                parameters += ")";
-                query = query.replace("()", parameters);
+                for(int i=2; i <= entityBinding.getProperties().size(); i++) query.insert(index, "?, ");
                 break;
 
             default:
                 throw new NotImplementedException();
         }
 
-        idStringCache.put(entity, query);
-        updateCache.put(entityBinding, idStringCache);
-
-        return query;
+        updateCache.put(entityBinding, query.toString());
+        return query.toString();
     }
 
+    /*
     public List<String> createUpdate(EntityBinding entityBinding, List<Object> entities) {
 
         List<String> queries = new ArrayList<>();
         Iterator iterator = entities.iterator();
 
-        while (iterator.hasNext()) queries.add(createUpdate(entityBinding, iterator.next()));
+        while (iterator.hasNext()) queries.add(createUpdate(entityBinding));
 
         return queries;
     }
+    */
 
-    public String createDelete(EntityBinding entityBinding, Object entity) {
+    public String createDelete(EntityBinding entityBinding) {
 
-        String query;
-        PropertyBinding identifier = entityBinding.getIdentifier();
-        Object id = identifier.getFieldValue(entity);
+        String savedQuery = selectByIdCache.get(entityBinding);
+        if (savedQuery != null) return savedQuery;
 
-        Map<Object, String> idStringCache = deleteCache.get(entityBinding);
-        if (idStringCache == null) idStringCache = new Hashtable<>();
-        else {
-            query = idStringCache.get(id);
-            if (query != null) return query;
-        }
+        StringBuilder query = new StringBuilder(40);
 
         switch (entityBinding.getBindingType()){
-
             case Table:
-                query = "delete from " +
-                        entityBinding.getTableName() + " where " +
-                        entityBinding.getIdentifier().getColumnName() + "=" +
-                        entityBinding.getIdentifier().getFieldValue(entity);
+                query.append("delete from ")
+                     .append(entityBinding.getTableName())
+                     .append(" where ")
+                     .append(entityBinding.getIdentifier().getColumnName())
+                     .append("in (")
+                     .append(entityBinding.getIdentifier().getFieldName())
+                     .append(")");
                 break;
 
             case StoredProcedure:
-                query = "{call " + generateNameProcedure(QueryType.delete, entityBinding.getPackageName()) + "}";
-                query = query.replace("()", "(" + entityBinding.getIdentifier().getFieldValue(entity) + ")");
+                query.append("{call ")
+                     .append(
+                             generateNameProcedure(QueryType.delete, entityBinding.getPackageName())
+                             )
+                     .append("}");
+
+                int index = query.indexOf("()");
+                if( index != -1) {
+                    query.insert(index + 1, ":" + entityBinding.getIdentifier().getFieldName());
+                }
+                else {
+                    index = query.indexOf(")");
+                    query.insert(index, ":" + entityBinding.getIdentifier().getFieldName());
+                }
                 break;
 
             default:
                 throw new NotImplementedException();
         }
 
-        idStringCache.put(id, query);
-        deleteCache.put(entityBinding, idStringCache);
-
-        return query;
+        deleteCache.put(entityBinding, query.toString());
+        return query.toString();
     }
 
-    public List<String> createDelete(EntityBinding entityBinding, List<Object> entities) {
+    /*
+    public List<StringBuilder> createDelete(EntityBinding entityBinding, List<Object> entities) {
 
-        List<String> queries = new ArrayList<>();
+        List<StringBuilder> queries = new ArrayList<>();
         Iterator iterator = entities.iterator();
 
         while(iterator.hasNext()) queries.add(createDelete(entityBinding, iterator.next()));
 
         return queries;
     }
+    */
 
-    public List<String> createInsert(EntityBinding entityBinding, List<Object> entities) {
+    /*
+    public List<StringBuilder> createInsert(EntityBinding entityBinding, List<Object> entities) {
 
-        List<String> queries = new ArrayList<>();
+        List<StringBuilder> queries = new ArrayList<>();
         Iterator iterator = entities.iterator();
 
         while (iterator.hasNext()) queries.add(createUpdate(entityBinding, iterator.next()));
 
         return queries;
     }
+    */
 
-    public String createInsert(EntityBinding entityBinding, Object entity) {
+    public String createInsert(EntityBinding entityBinding) {
 
-        String query;
+        String savedQuery = updateCache.get(entityBinding);
+        if (savedQuery != null) return savedQuery;
 
-        Map<Object, String> idStringCache = insertCache.get(entityBinding);
-        if (idStringCache == null) idStringCache = new Hashtable<>();
-        else {
-            query = idStringCache.get(entity);
-            if (query != null) return query;
-        }
-
-        String values;
-        Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
-        PropertyBinding property;
+        StringBuilder query = new StringBuilder(40);
+        StringBuilder values;
 
         switch (entityBinding.getBindingType()) {
-
             case Table:
+                Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
+                PropertyBinding property;
 
-                query = "insert into  " + entityBinding.getTableName() + " (";
+                query.append("insert into  ")
+                     .append(entityBinding.getTableName())
+                     .append(" (");
 
-                values = "(";
+                values = new StringBuilder("(");
                 property = iterator.next();
 
-                query += property.getColumnName();
-                values += property.getFieldValue(entity);
+                query.append(property.getColumnName());
+                values.append(":" + property.getFieldName());
 
                 while (iterator.hasNext()) {
                     property = iterator.next();
-                    query += (", " + property.getColumnName());
-                    values += (", " + property.getFieldValue(entity));
+                    if(property != entityBinding.getIdentifier()) {
+                        query.append(", ")
+                             .append(":" + property.getColumnName());
+                        values.append(", ")
+                              .append(":" + property.getFieldName());
+                    }
                 }
 
-                query += (") values " + values + ")");
+                query.append(") values(")
+                     .append(values)
+                     .append(")");
                 break;
 
             case StoredProcedure:
+                query.append("{ call ")
+                     .append(
+                             generateNameProcedure(QueryType.insert, entityBinding.getPackageName())
+                             )
+                     .append("}");
 
-                query = "{ call " + generateNameProcedure(QueryType.insert, entityBinding.getPackageName()) + "}";
-                values = "(";
+                values = new StringBuilder("(");
 
-                property = iterator.next();
-                values += property.getFieldValue(entity);
+                int index = query.indexOf("()") +1;
+                if (index == 0) index = query.indexOf(")");
+                query.insert(index, "?");
+                for( int i = 3; i <= entityBinding.getProperties().size(); i++) query.insert(index, ", ?");
 
-                while (iterator.hasNext()) values += (", " + iterator.next().getFieldValue(entity));
-
-                values += ")";
-                query = query.replace("()", values);
                 break;
 
             default:
                 throw new NotImplementedException();
         }
 
-        idStringCache.put(entity, query);
-        insertCache.put(entityBinding, idStringCache);
-
-        return query;
+        insertCache.put(entityBinding, query.toString());
+        return query.toString();
     }
 
     private String generateNameProcedure(QueryType queryType, String procedurePackage) {
