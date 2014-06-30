@@ -5,15 +5,6 @@ import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 import java.lang.reflect.Method;
 import java.util.*;
 
-/**
- *
- */
-enum QueryType{
-    select,
-    insert,
-    update,
-    delete
-}
 //TODO: Возможно стоит добавить интерфейс, требующий реализации generateProcedureName
 //TODO: Возможно лучше возвращать StringBuilder, а не List<StringBuilder>
 //TODO: Генерировать запросы с незаполнеными параметрами

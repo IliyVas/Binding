@@ -10,6 +10,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  *
@@ -22,12 +23,14 @@ public class EntityBinding<T> {
     private String packageName;
     private List<PropertyBinding> properties;
     private EntityBindingType bindingType;
-    private PropertyBinding identifier;
+    private Map<String, PropertyBinding> propertyBindingMap;
+    private QueryBank queryBank;
 
     public EntityBinding(Class entity, EntityBindingType bindingType) {
         this.entity = entity;
         this.bindingType = bindingType;
         this.properties = new ArrayList<>();
+        this.queryBank = new QueryBank();
         try {
             Method getter;
             String getterName;
@@ -118,5 +121,12 @@ public class EntityBinding<T> {
         return entity;
     }
 
+    public QueryBank getQueryBank() {
+        return queryBank;
+    }
+
+    public PropertyBinding getPropertyBinding(String fieldName) {
+        return propertyBindingMap.get(fieldName);
+    }
 }
 
