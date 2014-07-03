@@ -2,10 +2,7 @@ package BindingLib;
 
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
@@ -59,11 +56,16 @@ public class Session {
         throw new NotImplementedException();
     }
 
-    public void get(Class entity, String field, Object value) { throw new NotImplementedException(); }
+    public Select getFrom(Class entity) {
+       return new Select(entityBindingRepository.get(entity), connection);
+    }
 
     public void getById(Class entity, int id) { throw new NotImplementedException(); }
 
-    public void getAll(Class entity) { throw new NotImplementedException(); }
+    public <T> T[] getAll(Class entity) throws SQLException {
+        ResultSet resultSet = executor.executeSelectAll(entityBindingRepository.get(entity));
+
+    }
 
     public Map<Class, EntityBinding> getEntityBindingRepository() {
         return entityBindingRepository;

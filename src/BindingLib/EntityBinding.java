@@ -26,7 +26,7 @@ public class EntityBinding<T> {
     private Map<String, PropertyBinding> propertyBindingMap;
     private QueryBank queryBank;
 
-    public EntityBinding(Class entity, EntityBindingType bindingType) {
+    public EntityBinding(Class<T> entity, EntityBindingType bindingType) {
         this.entity = entity;
         this.bindingType = bindingType;
         this.properties = new ArrayList<>();
@@ -87,8 +87,8 @@ public class EntityBinding<T> {
 
     }
 
-    public Class getEntity() {
-        return entity;
+    public Class<T> getEntity() {
+        return this.entity;
     }
 
     public String getTableName() {

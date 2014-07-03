@@ -2,6 +2,10 @@ package BindingLib;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /*
@@ -15,44 +19,22 @@ public class Executor {
     private QueryGenerator queryGenerator;
     private PropertyMapper propertyMapper;
 
-    <T> T[] executeSelectAll(Class<T> entity) {
-        String query;
-        EntityBinding entityBinding = entityBindingRepository.get(entity);
-        QueryBank queryBank = entityBinding.getQueryBank();
-
-        query = queryBank.getSelectAll();
-
-        if ( query == "" ) {
-
-        }
+    ResultSet executeSelectAll(EntityBinding entityBinding) throws SQLException {
+        PreparedStatement query;
+        query = connection.prepareStatement( queryGenerator.createSelectAll(entityBinding) );
+        return query.executeQuery();
     }
 
-    <T> T[] executeSelect(Class<T> entity, String... parametersAndValues) {
-        PreparedStatement query;
-        EntityBinding entityBinding = entityBindingRepository.get(entity);
-        QueryBank queryBank = entityBinding.getQueryBank();
+    ResultSet executeSelect(String sql, List bindingParameters) throws SQLException {
+        PreparedStatement query = connection.prepareStatement(sql);
+        Iterator iterator = bindingParameters.iterator();
+        int index = 1;
 
-        if (parametersAndValues.length % 2 == 0) {
-            int propertyNumber = parametersAndValues.length / 2;
-            PropertyBinding[] propertyBindings = new PropertyBinding[propertyNumber];
-            Object[] propertyValues = new Object[propertyNumber];
-
-            for (int i = 0; i < propertyNumber; i++) {
-                propertyBindings[i] = entityBinding.getPropertyBinding( parametersAndValues[2*i] );
-                propertyValues[i] = parametersAndValues[2*i + 1];
-            }
-
-            query = connection.prepareStatement( queryBank.getSelect(propertyBindings) );
-
-            if (query == null) {
-                String sql = queryGenerator.createSelect(entity, propertyBindings);
-                queryBank.addSelect(propertyBindings, sql);
-                query = connection.prepareStatement(sql);
-            }
-
-            query = propertyMapper.setQueryProperties(query, propertyValues);
-            query.executeQuery();
-
+        while (iterator.hasNext()) {
+            query.setObject(index, iterator.next());
+            index++;
         }
+
+        return query.executeQuery();
     }
 }
