@@ -1,5 +1,6 @@
 package BindingLib;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
@@ -7,16 +8,11 @@ import java.lang.reflect.Method;
  *
  */
 public class PropertyBinding {
-    private Method getter;
-    private Method setter;
+    private Field field;
     private String columnName;
-    private String fieldName;
 
     public PropertyBinding(Method getter, Method setter, String columnName, String fieldName) {
-        this.setter = setter;
-        this.getter = getter;
         this.columnName = columnName;
-        this.fieldName = fieldName;
     }
 
     public String getColumnName() {

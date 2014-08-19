@@ -24,17 +24,4 @@ public class Executor {
         query = connection.prepareStatement( queryGenerator.createSelectAll(entityBinding) );
         return query.executeQuery();
     }
-
-    ResultSet executeSelect(String sql, List bindingParameters) throws SQLException {
-        PreparedStatement query = connection.prepareStatement(sql);
-        Iterator iterator = bindingParameters.iterator();
-        int index = 1;
-
-        while (iterator.hasNext()) {
-            query.setObject(index, iterator.next());
-            index++;
-        }
-
-        return query.executeQuery();
-    }
 }

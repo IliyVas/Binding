@@ -6,6 +6,7 @@ import java.sql.*;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /*
 *
@@ -56,15 +57,14 @@ public class Session {
         throw new NotImplementedException();
     }
 
-    public Select getFrom(Class entity) {
-       return new Select(entityBindingRepository.get(entity), connection);
-    }
-
     public void getById(Class entity, int id) { throw new NotImplementedException(); }
 
-    public <T> T[] getAll(Class entity) throws SQLException {
-        ResultSet resultSet = executor.executeSelectAll(entityBindingRepository.get(entity));
+    public WhereStatementPart get(Class entity) { return new WhereStatementPart(entityBindingRepository.get(entity)); }
 
+    public <T> Set<T> getAll(Class<T> entity) {
+        EntityBinding entityBinding = entityBindingRepository.get(entity);
+        connection.prepareStatement("sss").execute();
+        throw new NotImplementedException();
     }
 
     public Map<Class, EntityBinding> getEntityBindingRepository() {

@@ -3,7 +3,6 @@ package BindingLib;
 import Annotations.Column;
 import Annotations.Id;
 import Annotations.Table;
-import com.sun.xml.internal.bind.v2.runtime.IllegalAnnotationException;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -20,8 +19,8 @@ import java.util.Map;
 public class EntityBinding<T> {
     private Class<T> entity;
     private String tableName;
-    private String packageName;
     private List<PropertyBinding> properties;
+    private List<Relationship> relationships;
     private EntityBindingType bindingType;
     private Map<String, PropertyBinding> propertyBindingMap;
     private QueryBank queryBank;
@@ -98,6 +97,8 @@ public class EntityBinding<T> {
     public List<PropertyBinding> getProperties() {
         return properties;
     }
+
+    public List<Relationship> getRelationships() { return relationships; }
 
     public EntityBindingType getBindingType() {
         return bindingType;
