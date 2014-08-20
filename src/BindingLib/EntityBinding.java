@@ -3,6 +3,7 @@ package BindingLib;
 import Annotations.Column;
 import Annotations.Id;
 import Annotations.Table;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -108,7 +109,7 @@ public class EntityBinding<T> {
         return packageName;
     }
 
-    public PropertyBinding getIdentifier(){ return this.identifier; }
+    public PropertyBinding getIdentifier(){ throw new NotImplementedException(); }
 
     public void setEntity(Class entity) {
         this.entity = entity;

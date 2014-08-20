@@ -6,8 +6,10 @@ import java.util.Map;
 /**
  * Created by tt on 19.08.14.
  */
+
+//TODO: пересмотреть
 public class Relationship {
-    private RelationType type;
+    private Map<EntityBinding,RelationType> type;
     private String joiningTable;
     private Map<EntityBinding, String> columnName;
     private Map<EntityBinding, Field> field;
@@ -15,5 +17,13 @@ public class Relationship {
 
     public EntityBinding getAssociatedEntity(EntityBinding entityBinding) {
         return associatedEntity.get(entityBinding);
+    }
+
+    public RelationType getType(EntityBinding entityBinding) {
+        return type.get(entityBinding);
+    }
+
+    public String getColumnName(EntityBinding entityBinding) {
+        return columnName.get(entityBinding);
     }
 }
