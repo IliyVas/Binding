@@ -3,58 +3,69 @@ package BindingLib;
 import Annotations.Column;
 import Annotations.Id;
 import Annotations.Table;
+import javassist.*;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 /**
  *
  */
 //TODO: решить где создавать подключение
-//TODO: разобраться с generics
-public class EntityBinding<T> {
-    private Class<T> entity;
-    private String tableName;
-    private List<PropertyBinding> properties;
+public abstract class EntityBinding {
+
+    private Class entity;
     private List<Relationship> relationships;
-    private EntityBindingType bindingType;
-    private Map<String, PropertyBinding> propertyBindingMap;
-    private QueryBank queryBank;
+    private Set connectedEntities;
+    //TODO: Возможно нужно оставить только одного "слушателя"
+    private List<AttemptToGetUnloadedFieldListener> listeners;
 
-    public EntityBinding(Class<T> entity, EntityBindingType bindingType) {
+    //TODO: Если возможно, то сделать перечислением
+    // 0 - new
+    // 1 - upToDate
+    // 2 - changed
+    // 3 - lazyLoaded
+    private CtField stateField;
+    private CtField entityBindingField;
+
+    public EntityBinding(Class entity, CtClass ) {
+
+        CtClass entityCtClass;
+        String columnName;
+
+        ClassPool cp = ClassPool.getDefault();
+        //TODO: возможно entity нужно определять после вызова toClass
         this.entity = entity;
-        this.bindingType = bindingType;
-        this.properties = new ArrayList<>();
-        this.queryBank = new QueryBank();
+        this.listeners = new ArrayList<>();
+
         try {
-            Method getter;
-            String getterName;
-            Method setter;
-            String setterName;
-            String columnName;
-            for (Field field : entity.getDeclaredFields()) {
-                if (field.isAnnotationPresent(Column.class)) {
-                    getterName = "get" +
-                            field.getName().substring(0, 1).toUpperCase() +
-                            field.getName().substring(1);
-                    getter = entity.getMethod(getterName);
-                    if (getter.getReturnType() != field.getType()) throw new NoSuchMethodException();
+            //TODO: проверить что быстрее: reflection или javassist
+            entityCtClass = cp.getCtClass(entity.getCanonicalName());
+
+            stateField = new CtField(
+                    CtClass.byteType,
+                    "state" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmnnnnnnnnnss")),
+                    entityCtClass);
+            entityCtClass.addField(stateField);
+
+            entityBindingField = CtField.make(
+                    "EntityBinding eb" +
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmnnnnnnnnnss;")),
+                    entityCtClass);
+            entityCtClass.addField(entityBindingField);
+
+            for (CtField field : entityCtClass.getDeclaredFields()) {
+
+                if (field.hasAnnotation(Column.class)) {
 
 
-                    setterName = "set" +
-                            field.getName().substring(0, 1).toUpperCase() +
-                            field.getName().substring(1);
-                    setter = entity.getMethod(setterName);
-                    if (setter.getParameterTypes().length != 1 &&
-                            setter.getParameterTypes()[0] != field.getType())
-                        throw new NoSuchMethodException();
-
-                    columnName = field.getAnnotation(Column.class).name();
+                    columnName = ((Column)field.getAnnotation(Column.class)).name();
 
                     PropertyBinding property = new PropertyBinding(getter, setter, columnName, field.getName());
                     this.properties.add(property);
@@ -62,11 +73,12 @@ public class EntityBinding<T> {
                     if (field.isAnnotationPresent(Id.class)) {
                         this.identifier = property;
                     }
+                    //TODO: переопределить hashCode
                 }
             }
         }
-        catch (NoSuchMethodException ex) {
-            System.out.println(ex);
+        catch (NotFoundException | CannotCompileException | ClassNotFoundException ex) {
+            ex.printStackTrace();
         }
 
         this.properties.add(this.identifier);
@@ -87,9 +99,68 @@ public class EntityBinding<T> {
 
     }
 
-    public Class<T> getEntity() {
-        return this.entity;
+    private void extendingGetterAndSetterMethods(Field field, CtClass entityCtClass) {
+
+        CtMethod getter, setter;
+        String getterName, setterName, columnName;
+
+        try {
+
+            //TODO: добавить is для boolean
+            getterName = "get" +
+                    field.getName().substring(0, 1).toUpperCase() +
+                    field.getName().substring(1);
+
+            getter = entityCtClass.getDeclaredMethod(getterName);
+
+            //TODO: рассмотреть другие подходы
+            if (getter.getReturnType().getName() != field.getType().getName())
+                throw new NotFoundException("Method not found");
+
+            getter.insertBefore(
+                    "if(" + stateField.getName() + "==3){" +
+                            entityBindingField.getName() + ".fireGettingUloadedFieldEvent(this);" +
+                            stateField.getName() + "=1; }"
+            );
+
+
+            setterName = "set" +
+                    field.getName().substring(0, 1).toUpperCase() +
+                    field.getName().substring(1);
+
+            setter = entityCtClass.getDeclaredMethod(setterName);
+
+            if (setter.getParameterTypes().length != 1 ||
+                    setter.getParameterTypes()[0].getName() != field.getType().getName())
+                throw new NotFoundException("Method not found");
+
+            //TODO: Добавить проверку на изменение параметра
+            setter.insertBefore(
+                    stateField.getName() + "=\"changed\";"
+            );
+        }
+        catch (NotFoundException | CannotCompileException ex) {
+            ex.printStackTrace();
+        }
     }
+
+    public void addGettingUnloadedFieldLListener(AttemptToGetUnloadedFieldListener listener) {
+        this.listeners.add(listener);
+    }
+
+    public void fireGettingUnloadedFieldEvent(Object obj) {
+        for (AttemptToGetUnloadedFieldListener listener : listeners) {
+            listener.loadObject(this, obj);
+        }
+    }
+
+    CtClass getEntityCtClass() {
+        return this.entityClass;
+    }
+
+    Class getEntityClass() { return this.entityClass.toClass(); }
+
+    CtField getIdCtField() { return this.i}
 
     public String getTableName() {
         return tableName;
@@ -109,26 +180,23 @@ public class EntityBinding<T> {
         return packageName;
     }
 
-    public PropertyBinding getIdentifier(){ throw new NotImplementedException(); }
+    abstract PropertyBinding getIdentifier();
 
     public void setEntity(Class entity) {
         this.entity = entity;
     }
 
-    //Не слишком ли много исключений?
-    public T getAll() throws ClassNotFoundException, IllegalAccessException, InstantiationException, InvocationTargetException {
-        Class c = Class.forName(entity.getName());
-        T entity = (T)c.newInstance();
-        this.identifier.setFieldValue(entity, 1);
-        return entity;
-    }
-
-    public QueryBank getQueryBank() {
-        return queryBank;
-    }
-
     public PropertyBinding getPropertyBinding(String fieldName) {
         return propertyBindingMap.get(fieldName);
+    }
+
+    private boolean isMethodExist(String methodName) {
+        for (CtMethod method : entityClass.getDeclaredMethods())  {
+            System.out.println(method.getName());
+            if (method.getName() == methodName) return true;
+        }
+
+        return false;
     }
 }
 

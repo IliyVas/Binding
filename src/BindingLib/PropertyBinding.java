@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 /**
  *
  */
-public class PropertyBinding {
+class PropertyBinding {
     private Field field;
     private String columnName;
 
@@ -19,8 +19,8 @@ public class PropertyBinding {
         return columnName;
     }
 
-    public String getFieldValue(Object obj) throws InvocationTargetException, IllegalAccessException {
-        return getter.invoke(obj, new Object[]{ null }).toString();
+    public Object getFieldValue(Object obj) throws InvocationTargetException, IllegalAccessException {
+        return field.get(obj);
     }
 
     public void setFieldValue(Object obj, Object value) throws InvocationTargetException, IllegalAccessException {

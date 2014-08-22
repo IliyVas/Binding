@@ -4,8 +4,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /*
@@ -17,7 +15,7 @@ public class Executor {
     private Connection connection;
     private Map<Class, EntityBinding> entityBindingRepository;
     private QueryGenerator queryGenerator;
-    private PropertyMapper propertyMapper;
+    private ResultSetMapper propertyMapper;
 
     ResultSet executeSelectAll(EntityBinding entityBinding) throws SQLException {
         PreparedStatement query;

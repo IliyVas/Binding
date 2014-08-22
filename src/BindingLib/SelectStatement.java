@@ -135,7 +135,7 @@ public class SelectStatement {
 
             String tableNameOrAlias(String name) {
                 if (usedTableNames.contains(name))
-                    return name + "_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmssnnnnnnnnn"));
+                    return name + "_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmnnnnnnnnnss"));
                 else {
                     usedTableNames.add(name);
                     return name;

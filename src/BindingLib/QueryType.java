@@ -2,10 +2,14 @@ package BindingLib;
 
 /*
  */
-public enum QueryType {
-    select,
+enum QueryType {
+    selectById,
     selectAll,
     insert,
     update,
-    delete
+    delete,
+    customSelect,
+    insertBatch,
+    updateBatch,
+    deleteBatch
 }

@@ -1,5 +1,8 @@
 package BindingLib;
 
+import oracle.jdbc.OracleCallableStatement;
+import oracle.jdbc.OraclePreparedStatement;
+import oracle.jdbc.OracleResultSet;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.sql.*;
@@ -12,13 +15,15 @@ import java.util.Set;
 *
 */
 
-public class Session {
+public class Session implements AttemptToGetUnloadedFieldListener {
     Connection connection;
     private String url;
     private String dbUser;
     private String password;
     private Map<Class, EntityBinding> entityBindingRepository;
     private Executor executor;
+    private QueryGenerator queryGenerator;
+    private Cache cache;
 
     public Session(String url, String dbUser, String password) {
         this.url = url;
@@ -26,6 +31,7 @@ public class Session {
         this.password = password;
         this.executor = new Executor();
         this.entityBindingRepository = new Hashtable<>();
+        this.queryGenerator = new QueryGenerator();
     }
 
     public void open() {
@@ -57,14 +63,48 @@ public class Session {
         throw new NotImplementedException();
     }
 
-    public void getById(Class entity, int id) { throw new NotImplementedException(); }
+    private OraclePreparedStatement loadById(EntityBinding entityBinding, Object id) {
+        if (entityBinding instanceof StoredProcedureBinding) {
+            StoredProcedureBinding binding = (StoredProcedureBinding)entityBinding;
+            OraclePreparedStatement statement = queryGenerator.createSelectById(binding, id);
+            return statement;
+        }
+    }
+
+    @Override
+    public void loadObject(EntityBinding entityBinding, Object object) {
+        Object id = entityBinding.getIdentifier().getFieldValue(object);
+        OraclePreparedStatement statement = loadById(entityBinding, id);
+        OracleResultSet resultSet = statement.executeQuery();
+        ResultSetMapper.map(resultSet.next(), object);
+    }
+
+    public void getById(Class entity, Object id) {
+        OracleResultSet resultSet = loadById(entityBindingRepository.get(entity), id);
+
+    }
 
     public WhereStatementPart get(Class entity) { return new WhereStatementPart(entityBindingRepository.get(entity)); }
 
+    //TODO: подумать над реализацией в отдельном классе
     public <T> Set<T> getAll(Class<T> entity) {
+        Set<T> resultEntities;
         EntityBinding entityBinding = entityBindingRepository.get(entity);
-        connection.prepareStatement("sss").execute();
-        throw new NotImplementedException();
+        if (entityBinding instanceof StoredProcedureBinding) {
+            StoredProcedureBinding binding = (StoredProcedureBinding)entityBinding;
+            OraclePreparedStatement statement = queryGenerator.createSelectAll(binding);
+            if (cache.isOutOfDate(binding, statement)) {
+                ResultSet resultSet = statement.executeQuery();
+                resultEntities = ResultSetMapper.createFrom(resultSet, binding);
+                cache.put(binding, statement, resultEntities);
+            }
+            else resultEntities = cache.get(binding,statement);
+            statement.close();
+
+
+            binding.setAsConnected(resultEntities);
+            return resultEntities;
+        }
     }
 
     public Map<Class, EntityBinding> getEntityBindingRepository() {
