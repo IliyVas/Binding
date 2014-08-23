@@ -17,7 +17,6 @@ import java.util.Set;
 /**
  *
  */
-//TODO: решить где создавать подключение
 public abstract class EntityBinding {
 
     private Class entity;
@@ -27,27 +26,22 @@ public abstract class EntityBinding {
     private List<AttemptToGetUnloadedFieldListener> listeners;
 
     //TODO: Если возможно, то сделать перечислением
-    // 0 - new
-    // 1 - upToDate
-    // 2 - changed
-    // 3 - lazyLoaded
+    // stateField values:
+    //   0 - new
+    //   1 - upToDate
+    //   2 - changed
+    //   3 - lazyLoaded
+
     private CtField stateField;
     private CtField entityBindingField;
 
-    public EntityBinding(Class entity, CtClass ) {
+    public EntityBinding(Class entity, CtClass entityCtClass) {
 
-        CtClass entityCtClass;
-        String columnName;
-
-        ClassPool cp = ClassPool.getDefault();
         //TODO: возможно entity нужно определять после вызова toClass
         this.entity = entity;
         this.listeners = new ArrayList<>();
 
         try {
-            //TODO: проверить что быстрее: reflection или javassist
-            entityCtClass = cp.getCtClass(entity.getCanonicalName());
-
             stateField = new CtField(
                     CtClass.byteType,
                     "state" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmnnnnnnnnnss")),
@@ -60,28 +54,13 @@ public abstract class EntityBinding {
                     entityCtClass);
             entityCtClass.addField(entityBindingField);
 
-            for (CtField field : entityCtClass.getDeclaredFields()) {
 
-                if (field.hasAnnotation(Column.class)) {
-
-
-                    columnName = ((Column)field.getAnnotation(Column.class)).name();
-
-                    PropertyBinding property = new PropertyBinding(getter, setter, columnName, field.getName());
-                    this.properties.add(property);
-
-                    if (field.isAnnotationPresent(Id.class)) {
-                        this.identifier = property;
-                    }
-                    //TODO: переопределить hashCode
-                }
-            }
         }
         catch (NotFoundException | CannotCompileException | ClassNotFoundException ex) {
             ex.printStackTrace();
         }
 
-        this.properties.add(this.identifier);
+        this.relationships.l
 
         if(this.entity.isAnnotationPresent(Table.class)){
             switch (bindingType) {
@@ -99,7 +78,7 @@ public abstract class EntityBinding {
 
     }
 
-    private void extendingGetterAndSetterMethods(Field field, CtClass entityCtClass) {
+    protected void extendingGetterAndSetterMethods(CtField field, CtClass entityCtClass) {
 
         CtMethod getter, setter;
         String getterName, setterName, columnName;
