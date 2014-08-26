@@ -2,84 +2,83 @@ package BindingLib;
 
 import Annotations.*;
 import Exceptions.BadOrderValueException;
+import Exceptions.MultipleColumnTypeAnnotationsException;
 import Exceptions.MultipleOrderAnnotationsException;
 import Exceptions.NoOrderAnnotationException;
-import javassist.ClassPool;
-import javassist.CtClass;
-import javassist.CtField;
-import javassist.NotFoundException;
+import javassist.*;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Created by tt on 21.08.14.
+/*
  */
-class StoredProcedureBinding extends EntityBinding {
-    SpPropertyBinding identifier;
-    List<SpPropertyBinding> propertyBindings;
+public class StoredProcedureBinding extends EntityBinding {
+    private Map<QueryType, String> proceduresNames;
+    private SpPropertyBinding identifier;
+    private List<SpPropertyBinding> properties;
 
-    StoredProcedureBinding(Class entity) throws NotFoundException{
-        this(
-                entity,
-                ClassPool.getDefault().getCtClass(entity.getCanonicalName())
-        );
-    }
-    StoredProcedureBinding(Class entity, CtClass entityCtClass) {
-        super(entity, entityCtClass);
-        this.propertyBindings = new ArrayList<>();
+   public StoredProcedureBinding(Class entity) {
 
-        CtField field;
+        super(entity);
+
+        this.properties = new ArrayList<>();
+
+        Field field;
         String columnName;
+        String associatedEntity;
+        String entityBindingFieldName = createEntityBindingField();
         Map<QueryType, Integer> order = new HashMap<>();
+        Map<Relationship, String> stateFieldsNames = new HashMap<>();
 
-        CtField[] fields = entityCtClass.getDeclaredFields();
+        Field[] fields = entity.getDeclaredFields();
         boolean[] usedInsertPositions = new boolean[fields.length];
         boolean[] usedUpdatePositions = new boolean[fields.length];
-        byte length = 0; //Число полей, помеченных @Column
+        byte length = 0; //Число полей, помеченных @Column или @ManyToOne
         OrderingType orderingType = OrderingType.unknown;
 
+        try {
 
-        for (int i = 0; i < fields.length; i++ ) {
+            CtClass entityCtClass = ClassPool.getDefault().getCtClass(entity.getName());
 
-            field = fields[i];
-            order.clear();
+            for (int i = 0; i < fields.length; i++) {
 
-            if (field.hasAnnotation(Order.class)) {
-                try {
-                    Order orderAnnotation = (Order)field.getAnnotation(Order.class);
-                    byte value = orderAnnotation.value();
+                field = fields[i];
+                order.clear();
+
+                if (field.isAnnotationPresent(Order.class)) {
+
+                    Order orderAnnotation = field.getAnnotation(Order.class);
+                    int value = orderAnnotation.value();
 
                     if (
                             value > fields.length ||
                             value <= 0 ||
                             usedUpdatePositions[value - 1] == true ||
                             usedInsertPositions[value - 1] == true ||
-                            field.hasAnnotation(Id.class) ||
+                            field.isAnnotationPresent(Id.class) ||
+                            field.isAnnotationPresent(OneToMany.class) ||
                             (orderingType != OrderingType.general && orderingType != OrderingType.unknown)
                     )
                     throw new BadOrderValueException();
 
-                    if (field.hasAnnotation(OrderInInsert.class) || field.hasAnnotation(OrderInUpdate.class))
-                        throw new MultipleOrderAnnotationsException();
+                    if (field.isAnnotationPresent(OrderInInsert.class) ||
+                        field.isAnnotationPresent(OrderInUpdate.class))
+                            throw new MultipleOrderAnnotationsException();
 
-                    usedUpdatePositions[value - 1 ] = true;
-                    usedInsertPositions[value - 1 ] = true;
-                    order.put(QueryType.update, (byte)(value + 1));
+                    usedUpdatePositions[value - 1] = true;
+                    usedInsertPositions[value - 1] = true;
+                    order.put(QueryType.update, value + 1);
                     order.put(QueryType.insert, value);
-                    propertyBindings.add(new SpPropertyBinding(field, columnName, order));
                     if (orderingType == OrderingType.unknown) orderingType = OrderingType.general;
 
+                } else if (field.isAnnotationPresent(OrderInUpdate.class) || field.isAnnotationPresent(OrderInInsert.class)) {
 
-                }
-                catch (ClassNotFoundException e){}
-            }
-            else if (field.hasAnnotation(OrderInInsert.class) || field.hasAnnotation(OrderInUpdate.class)) {
-                try {
-                    byte orderInInsert = ((OrderInInsert)field.getAnnotation(OrderInInsert.class)).value();
-                    byte orderInUpdate = ((OrderInUpdate)field.getAnnotation(OrderInUpdate.class)).value();
+                    //TODO: проверить, что существуют обе аннотации
+                    int orderInInsert = field.getAnnotation(OrderInInsert.class).value();
+                    int orderInUpdate = field.getAnnotation(OrderInUpdate.class).value();
 
                     if (
                             orderInInsert > fields.length ||
@@ -88,7 +87,8 @@ class StoredProcedureBinding extends EntityBinding {
                             orderInUpdate <= 0 ||
                             usedInsertPositions[orderInInsert - 1] == true ||
                             usedUpdatePositions[orderInUpdate - 1] == true ||
-                            (orderingType != OrderingType.custom && i != 0)
+                            field.isAnnotationPresent(OneToMany.class) ||
+                            (orderingType != OrderingType.custom && length != 0)
                     )
                     throw new BadOrderValueException();
 
@@ -96,46 +96,89 @@ class StoredProcedureBinding extends EntityBinding {
                     usedUpdatePositions[orderInUpdate - 1] = true;
                     order.put(QueryType.update, orderInUpdate);
                     order.put(QueryType.insert, orderInInsert);
-                    propertyBindings.add(new SpPropertyBinding(field, columnName, order));
+
+                    if (orderingType != OrderingType.custom) orderingType = OrderingType.custom;
+
+                } else {
+
+                    if (orderingType != OrderingType.defaultOrder &&
+                       (length > 1 || orderingType != OrderingType.unknown))
+                        throw new BadOrderValueException();
+
+                    if (!field.isAnnotationPresent(Id.class)) {
+
+                        //TODO: возможно нужно добавить проверку на OneToMany
+                        order.put(QueryType.insert, length + 1);
+
+                        if (orderingType != OrderingType.defaultOrder) orderingType = OrderingType.defaultOrder;
+                    }
+
+                    order.put(QueryType.update, length + 1);
                 }
-                catch (ClassNotFoundException e) {
-                    throw new BadOrderValueException();
-                }
+
+                if (field.isAnnotationPresent(Column.class)) {
+                    if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToOne.class))
+                        throw new MultipleColumnTypeAnnotationsException();
+
+                    Column columnAnnotation = field.getAnnotation(Column.class);
+                    properties.add(new SpPropertyBinding(field, columnAnnotation.name(), order));
+
+                } else if (field.isAnnotationPresent(ManyToOne.class)) {
+                    if (field.isAnnotationPresent(OneToMany.class))
+                        throw new MultipleColumnTypeAnnotationsException();
+
+                    ManyToOne manyToOneAnnotation = field.getAnnotation(ManyToOne.class);
+
+                    associatedEntity = manyToOneAnnotation.associatedEntity();
+
+                    SpManyToOneRelationship newRelationship =
+                            new SpManyToOneRelationship(field,
+                                    manyToOneAnnotation.fkColumnName(), associatedEntity, order);
+
+                    addRelationship(newRelationship);
+
+                    stateFieldsNames.put(newRelationship,
+                            extendingGetterAndSetterMethods(field, entityBindingFieldName, newRelationship));
+
+                } else if (field.isAnnotationPresent(OneToMany.class)) {
+
+                    OneToMany oneToManyAnnotation = field.getAnnotation(OneToMany.class);
+
+                    OneToManyRelationship newRelationship = new OneToManyRelationship(field,
+                            oneToManyAnnotation.associatedEntity(),
+                            oneToManyAnnotation.associatedField());
+
+                    addRelationship(newRelationship);
+
+                    stateFieldsNames.put(newRelationship,
+                            extendingGetterAndSetterMethods(field, entityBindingFieldName, newRelationship));
+
+                } else length--;
+
+                length++;
             }
-            else {
-                if (
-                        orderingType != OrderingType.defaultOrder &&
-                        (length > 1 ||  orderingType != OrderingType.unknown)
-                )
-                throw new NoOrderAnnotationException();
-                ё
-                if (!field.hasAnnotation(Id.class)) {
-                    order.put(QueryType.insert, length + 1);
-                    order.put(QueryType.update, length + 2);
-                    if (orderingType != OrderingType.defaultOrder) orderingType = OrderingType.defaultOrder;
 
-                    propertyBindings.add(field, columnName, order);
-                    length++;
+            entityCtClass.setName(entityCtClass.getName() + postfix());
+            setEntity(entityCtClass.toClass());
+            setEntityBindingField(getEntityClass().getDeclaredField(entityBindingFieldName));
 
-                }
+            for (Relationship relationship : getRelationships()) {
+                relationship.setIsDependenciesLoadedField(
+                        getEntityClass().getDeclaredField(stateFieldsNames.get(relationship)));
             }
 
-            if (field.hasAnnotation(Column.class)) {
-                columnName = ((Column)field.getAnnotation(Column.class)).name();
+        } catch (Exception e) {
 
-                extendingGetterAndSetterMethods(field, entityCtClass);
-
-                SpPropertyBinding property = new SpPropertyBinding(field, columnName);
-                this.properties.add(property);
-
-                if (field.isAnnotationPresent(Id.class)) {
-                    this.identifier = property;
-                }
-                //TODO: переопределить hashCode
-            }
+                e.printStackTrace();
         }
+
     }
 
+    protected String getProcedureName(QueryType queryType) {
+        return proceduresNames.get(queryType);
+    }
+
+    protected List<SpPropertyBinding> getProperties() { return properties; }
     SpPropertyBinding getIdentifier() { return identifier; }
 
     enum OrderingType {

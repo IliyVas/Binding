@@ -11,5 +11,5 @@ import java.util.EventListener;
  * Created by tt on 22.08.14.
  */
 public interface AttemptToGetUnloadedFieldListener extends EventListener {
-    void loadObject(EntityBinding entityBinding, Object object);
+    void loadDependencies(EntityBinding entityBinding, Object object);
 }

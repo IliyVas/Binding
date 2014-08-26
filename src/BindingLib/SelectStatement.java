@@ -1,6 +1,5 @@
 package BindingLib;
 
-import Exceptions.BadQueryDepthValueException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -17,8 +16,8 @@ public class SelectStatement {
     private EntityBinding entityBinding;
     private StringBuilder statement;
 
-    public SelectStatement(EntityBinding entityBinding, JoiningStrategy joiningStrategy, int queryDepth) throws BadQueryDepthValueException {
-        if (queryDepth < 0) throw new BadQueryDepthValueException();
+    public SelectStatement(EntityBinding entityBinding, JoiningStrategy joiningStrategy, int queryDepth) {
+        /*
 
         this.entityBinding = entityBinding;
         this.statement = new StringBuilder();
@@ -141,6 +140,6 @@ public class SelectStatement {
                     return name;
                 }
             }
-        }
+        }*/
     }
 }

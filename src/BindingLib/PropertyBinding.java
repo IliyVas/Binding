@@ -7,11 +7,11 @@ import java.lang.reflect.Method;
 /**
  *
  */
-class PropertyBinding {
+class PropertyBinding implements EntityField {
     private Field field;
     private String columnName;
 
-    public PropertyBinding(Method getter, Method setter, String columnName, String fieldName) {
+    PropertyBinding(Field field, String columnName) {
         this.columnName = columnName;
     }
 
@@ -19,15 +19,12 @@ class PropertyBinding {
         return columnName;
     }
 
+    public Field getField() {
+        return field;
+    }
+
     public Object getFieldValue(Object obj) throws InvocationTargetException, IllegalAccessException {
         return field.get(obj);
     }
 
-    public void setFieldValue(Object obj, Object value) throws InvocationTargetException, IllegalAccessException {
-        setter.invoke(obj, new Object[]{value});
-    }
-
-    public String getFieldName() {
-        return fieldName;
-    }
 }

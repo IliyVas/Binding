@@ -1,29 +1,33 @@
 package BindingLib;
 
 import java.lang.reflect.Field;
-import java.util.Map;
 
 /**
  * Created by tt on 19.08.14.
  */
 
 //TODO: пересмотреть
-public class Relationship {
-    private Map<EntityBinding,RelationType> type;
-    private String joiningTable;
-    private Map<EntityBinding, String> columnName;
-    private Map<EntityBinding, Field> field;
-    private Map<EntityBinding, EntityBinding> associatedEntity;
+class Relationship {
+    private Class associatedEntity;
+    private Field field;
+    private Field isDependenciesLoadedField;
 
-    public EntityBinding getAssociatedEntity(EntityBinding entityBinding) {
-        return associatedEntity.get(entityBinding);
+    Relationship(Field field, String associatedEntity) {
+        try {
+            this.associatedEntity = Class.forName(associatedEntity);
+            this.field = field;
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 
-    public RelationType getType(EntityBinding entityBinding) {
-        return type.get(entityBinding);
+    protected Field getField() { return field; }
+
+    public Field getIsDependenciesLoadedField() {
+        return isDependenciesLoadedField;
     }
 
-    public String getColumnName(EntityBinding entityBinding) {
-        return columnName.get(entityBinding);
+    public void setIsDependenciesLoadedField(Field isDependenciesLoaded) {
+        this.isDependenciesLoadedField = isDependenciesLoaded;
     }
 }

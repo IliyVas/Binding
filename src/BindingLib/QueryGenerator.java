@@ -1,11 +1,14 @@
 package BindingLib;
 
+import Annotations.ManyToOne;
+import oracle.jdbc.OraclePreparedStatement;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.lang.reflect.Method;
+import java.sql.Connection;
 import java.util.*;
+import java.util.stream.Collectors;
 
-//TODO: Возможно стоит добавить интерфейс, требующий реализации generateProcedureName
 //TODO: Возможно лучше возвращать StringBuilder, а не List<StringBuilder>
 //TODO: Генерировать запросы с незаполнеными параметрами
 //TODO: Подумать над порядком параметов
@@ -15,6 +18,7 @@ import java.util.*;
 public class QueryGenerator  {
     private UserContext context;
     private Map<EntityBinding, String> selectAllCache;
+    private Map<EntityBinding, OraclePreparedStatement> selectAllStatementCache;
     private Map<EntityBinding, String> selectByIdCache;
     private Map<EntityBinding, String> updateCache;
     private Map<EntityBinding, String> updateBatchCache;
@@ -23,9 +27,9 @@ public class QueryGenerator  {
     private Map<EntityBinding, String> insertCache;
     private Map<EntityBinding, String> insertBatchCache;
 
-    public QueryGenerator(UserContext context) {
-        this.context = context;
+    public QueryGenerator() {
         this.selectAllCache = new Hashtable<>();
+        this.selectAllStatementCache = new Hashtable<>();
         this.selectByIdCache = new Hashtable<>();
         this.updateCache = new Hashtable<>();
         this.updateBatchCache = new Hashtable<>();
@@ -35,37 +39,32 @@ public class QueryGenerator  {
         this.insertBatchCache = new Hashtable<>();
     }
 
-    public String createSelectAll(EntityBinding entityBinding) {
+    String createSelectAll(EntityBinding binding) {
 
-        String savedQuery = selectAllCache.get(entityBinding);
-        if (savedQuery != null) return savedQuery.toString();
+        String query = selectAllCache.get(binding);
 
-        StringBuilder query = new StringBuilder(40);
-        Iterator<PropertyBinding> iterator = entityBinding.getProperties().iterator();
+        if (query == null) {
 
-        while(iterator.hasNext()) query.append(iterator.next().getColumnName()).append(" ");
+            StringBuilder newQuery = new StringBuilder("select ");
 
-        switch (entityBinding.getBindingType()){
-            case Table:
-                query.append("from ").append(entityBinding.getTableName());
-                break;
+            newQuery.append(binding.getProperties().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", ")))
+                    .append(' ')
+                    .append(binding.getRelationships().stream().filter(r -> r instanceof ManyToOneRelationship)
+                            .map(r -> ((ManyToOneRelationship) r).getColumnName()).collect(Collectors.joining(", ")))
+                    .append(" from ");
 
-            case StoredProcedure:
-                query.append("from table(")
-                     .append(
-                             generateNameProcedure(QueryType.select, entityBinding.getPackageName())
-                     )
-                     .append(")");
-                break;
+            if (binding instanceof SimpleBinding) newQuery.append(((SimpleBinding) binding).getTableName());
+            else newQuery.append("table(")
+                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectAll))
+                    .append("())");
 
-            default:
-                throw new NotImplementedException();
+            query = newQuery.toString();
+            selectAllCache.put(binding, query);
         }
 
-        selectAllCache.put(entityBinding, query.toString());
-        return query.toString();
+        return query;
     }
-
+/*
     public String createSelectById(EntityBinding entityBinding) {
 
         String savedQuery = selectByIdCache.get(entityBinding);
@@ -162,17 +161,7 @@ public class QueryGenerator  {
         return query.toString();
     }
 
-    /*
-    public List<String> createUpdate(EntityBinding entityBinding, List<Object> entities) {
 
-        List<String> queries = new ArrayList<>();
-        Iterator iterator = entities.iterator();
-
-        while (iterator.hasNext()) queries.add(createUpdate(entityBinding));
-
-        return queries;
-    }
-    */
 
     public String createDelete(EntityBinding entityBinding) {
 
@@ -217,29 +206,7 @@ public class QueryGenerator  {
         return query.toString();
     }
 
-    /*
-    public List<StringBuilder> createDelete(EntityBinding entityBinding, List<Object> entities) {
 
-        List<StringBuilder> queries = new ArrayList<>();
-        Iterator iterator = entities.iterator();
-
-        while(iterator.hasNext()) queries.add(createDelete(entityBinding, iterator.next()));
-
-        return queries;
-    }
-    */
-
-    /*
-    public List<StringBuilder> createInsert(EntityBinding entityBinding, List<Object> entities) {
-
-        List<StringBuilder> queries = new ArrayList<>();
-        Iterator iterator = entities.iterator();
-
-        while (iterator.hasNext()) queries.add(createUpdate(entityBinding, iterator.next()));
-
-        return queries;
-    }
-    */
 
     public String createInsert(EntityBinding entityBinding) {
 
@@ -320,5 +287,5 @@ public class QueryGenerator  {
                 break;
         }
         return procedureFullName;
-    }
+    } */
 }

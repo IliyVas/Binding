@@ -3,5 +3,5 @@ package Exceptions;
 /**
  * Created by tt on 23.08.14.
  */
-public class NoOrderAnnotationException {
+public class NoOrderAnnotationException extends Exception {
 }

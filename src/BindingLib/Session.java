@@ -1,6 +1,7 @@
 package BindingLib;
 
 import oracle.jdbc.OracleCallableStatement;
+import oracle.jdbc.OracleConnection;
 import oracle.jdbc.OraclePreparedStatement;
 import oracle.jdbc.OracleResultSet;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
@@ -16,6 +17,7 @@ import java.util.Set;
 */
 
 public class Session implements AttemptToGetUnloadedFieldListener {
+    //TODO: добавить SessionPool
     Connection connection;
     private String url;
     private String dbUser;
@@ -24,6 +26,7 @@ public class Session implements AttemptToGetUnloadedFieldListener {
     private Executor executor;
     private QueryGenerator queryGenerator;
     private Cache cache;
+    //TODO: возможно стоит добавить statement cache
 
     public Session(String url, String dbUser, String password) {
         this.url = url;
@@ -51,6 +54,10 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         }
     }
 
+    public void loadDependencies(EntityBinding entityBinding, Object obj) {
+
+    }
+
     public Connection getConnection() {
         return connection;
     }
@@ -63,48 +70,40 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         throw new NotImplementedException();
     }
 
-    private OraclePreparedStatement loadById(EntityBinding entityBinding, Object id) {
-        if (entityBinding instanceof StoredProcedureBinding) {
-            StoredProcedureBinding binding = (StoredProcedureBinding)entityBinding;
-            OraclePreparedStatement statement = queryGenerator.createSelectById(binding, id);
-            return statement;
-        }
-    }
 
-    @Override
-    public void loadObject(EntityBinding entityBinding, Object object) {
-        Object id = entityBinding.getIdentifier().getFieldValue(object);
-        OraclePreparedStatement statement = loadById(entityBinding, id);
-        OracleResultSet resultSet = statement.executeQuery();
-        ResultSetMapper.map(resultSet.next(), object);
-    }
 
-    public void getById(Class entity, Object id) {
-        OracleResultSet resultSet = loadById(entityBindingRepository.get(entity), id);
 
-    }
 
     public WhereStatementPart get(Class entity) { return new WhereStatementPart(entityBindingRepository.get(entity)); }
 
     //TODO: подумать над реализацией в отдельном классе
     public <T> Set<T> getAll(Class<T> entity) {
-        Set<T> resultEntities;
+        Set<T> resultEntities = null;
         EntityBinding entityBinding = entityBindingRepository.get(entity);
-        if (entityBinding instanceof StoredProcedureBinding) {
-            StoredProcedureBinding binding = (StoredProcedureBinding)entityBinding;
-            OraclePreparedStatement statement = queryGenerator.createSelectAll(binding);
-            if (cache.isOutOfDate(binding, statement)) {
-                ResultSet resultSet = statement.executeQuery();
-                resultEntities = ResultSetMapper.createFrom(resultSet, binding);
-                cache.put(binding, statement, resultEntities);
-            }
-            else resultEntities = cache.get(binding,statement);
-            statement.close();
 
+        ResultSet resultSet = null;
+        OraclePreparedStatement statement = null;
 
-            binding.setAsConnected(resultEntities);
-            return resultEntities;
+        try {
+            statement =
+                    (OraclePreparedStatement)connection.prepareStatement(queryGenerator.createSelectAll(entityBinding));
+
+            resultSet = statement.executeQuery();
+                resultEntities = ResultSetMapper.createEntities(resultSet, entityBinding);
+
         }
+        catch (SQLException e) {
+            e.printStackTrace();
+        }
+        finally{
+            //TODO: узнать, что случится в случае null
+            try{ resultSet.close(); }
+            catch(SQLException e){ e.printStackTrace(); }
+            try{ statement.close(); }
+            catch(SQLException e){ e.printStackTrace(); }
+        }
+
+        return resultEntities;
     }
 
     public Map<Class, EntityBinding> getEntityBindingRepository() {
