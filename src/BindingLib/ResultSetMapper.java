@@ -2,18 +2,17 @@ package BindingLib;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 
 /*
  */
 public class ResultSetMapper {
 
     //TODO: Использовать oracleresultset
-    protected static <T> Set<T> createEntities(ResultSet resultSet, EntityBinding entityBinding) throws SQLException{
+    protected static <T> List<T> createEntities(ResultSet resultSet, EntityBinding entityBinding) throws SQLException{
 
         Class entityClass = entityBinding.getEntityClass();
-        Set<T> newEntities = new HashSet<>();
+        List<T> newEntities = new ArrayList<>();
 
         while (resultSet.next()) {
             try {
@@ -21,7 +20,17 @@ public class ResultSetMapper {
                 T entity = (T)entityClass.newInstance();
 
                 for (PropertyBinding property : entityBinding.getProperties()) {
-                    property.getField().set(entity, resultSet.getObject(property.getColumnName()));
+                    Object columnValue = null;
+                    switch (property.getField().getType().getName()) {
+                        case "Integer":
+                        case "int":
+                            columnValue = resultSet.getInt(property.getColumnName());
+                            break;
+                        case "java.lang.String":
+                            columnValue = resultSet.getString(property.getColumnName());
+                            break;
+                    }
+                    property.getField().set(entity, columnValue);
                 }
 
 

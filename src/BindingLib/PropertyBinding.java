@@ -12,6 +12,8 @@ class PropertyBinding implements EntityField {
     private String columnName;
 
     PropertyBinding(Field field, String columnName) {
+        this.field = field;
+        this.field.setAccessible(true);
         this.columnName = columnName;
     }
 

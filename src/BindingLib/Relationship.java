@@ -16,6 +16,7 @@ class Relationship {
         try {
             this.associatedEntity = Class.forName(associatedEntity);
             this.field = field;
+            this.field.setAccessible(true);
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }

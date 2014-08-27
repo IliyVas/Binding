@@ -1,21 +1,23 @@
 package Test;
 
-import Annotations.Column;
-import Annotations.OneToMany;
+import Annotations.*;
 
 import java.util.List;
 
 /**
  * Created by tt on 26.08.14.
  */
-
+@Entity(bindingType = "StoredProsedure")
+@SelectAllProcedureName("TEST.getobj")
 public class Box {
+    @Id
     @Column(name="id")
     private int id;
     @Column(name= "name")
     private String name;
     @OneToMany(associatedField = "box", associatedEntity = "Test.Thing")
     private List<Thing> things;
+
 
     public Box() {
     }

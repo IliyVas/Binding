@@ -6,11 +6,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Created by tt on 21.08.14.
+ * Created by tt on 26.08.14.
  */
 @Retention(value= RetentionPolicy.RUNTIME)
 @Target(value= ElementType.TYPE)
-public @interface Entity {
-    //Simple или StoredProcedure
-    String bindingType() default "Simple";
+public @interface SelectAllProcedureName {
+    String value() default "";
 }

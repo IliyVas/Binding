@@ -1,16 +1,17 @@
 package BindingLib;
 
+import Annotations.Entity;
+import javassist.ClassPool;
 import oracle.jdbc.OracleCallableStatement;
 import oracle.jdbc.OracleConnection;
 import oracle.jdbc.OraclePreparedStatement;
 import oracle.jdbc.OracleResultSet;
+import org.reflections.Reflections;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.lang.reflect.Field;
 import java.sql.*;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /*
 *
@@ -26,15 +27,28 @@ public class Session implements AttemptToGetUnloadedFieldListener {
     private Executor executor;
     private QueryGenerator queryGenerator;
     private Cache cache;
+    private Map<EntityBinding, List> connectedEntities;
     //TODO: возможно стоит добавить statement cache
 
     public Session(String url, String dbUser, String password) {
+        Locale.setDefault(Locale.ENGLISH);
         this.url = url;
         this.dbUser = dbUser;
         this.password = password;
         this.executor = new Executor();
         this.entityBindingRepository = new Hashtable<>();
         this.queryGenerator = new QueryGenerator();
+        this.connectedEntities = new HashMap<>();
+
+        Reflections reflections = new Reflections("Test");
+        Set<Class<? extends Object>> classes = reflections.getTypesAnnotatedWith(Entity.class);
+        for (Class<? extends  Object> clazz : classes) {
+            if (clazz.getAnnotation(Entity.class).bindingType() == "Simple") {}
+            else {
+                StoredProcedureBinding binding = new StoredProcedureBinding(clazz);
+                entityBindingRepository.put(clazz, binding);
+            }
+        }
     }
 
     public void open() {
@@ -74,28 +88,45 @@ public class Session implements AttemptToGetUnloadedFieldListener {
 
 
 
-    public WhereStatementPart get(Class entity) { return new WhereStatementPart(entityBindingRepository.get(entity)); }
+    public WhereStatementPart get(Class entityClass) { return new WhereStatementPart(entityBindingRepository.get(entityClass)); }
 
     //TODO: подумать над реализацией в отдельном классе
-    public <T> Set<T> getAll(Class<T> entity) {
-        Set<T> resultEntities = null;
-        EntityBinding entityBinding = entityBindingRepository.get(entity);
+    public <T> List<T> getAll(Class<T> entityClass) {
+        List<T> resultEntities = null;
+        EntityBinding entityBinding = entityBindingRepository.get(entityClass);
 
         ResultSet resultSet = null;
-        OraclePreparedStatement statement = null;
+        PreparedStatement statement = null;
 
         try {
             statement =
-                    (OraclePreparedStatement)connection.prepareStatement(queryGenerator.createSelectAll(entityBinding));
+                    /*(OraclePreparedStatement) unimplemented feature*/
+                    connection.prepareStatement(queryGenerator.createSelectAll(entityBinding));
 
             resultSet = statement.executeQuery();
-                resultEntities = ResultSetMapper.createEntities(resultSet, entityBinding);
+            resultEntities = ResultSetMapper.createEntities(resultSet, entityBinding);
 
-        }
-        catch (SQLException e) {
+            List entities = connectedEntities.get(entityBinding);
+            if (entities == null) connectedEntities.put(entityBinding, resultEntities);
+            else {
+                Field identifier = entityBinding.getIdentifier().getField();
+                for (Object entityInResult : resultEntities) {
+                    boolean isAlreadyConnected = false;
+                    for (Object entity : entities) {
+                        if (identifier.get(entity) == identifier.get(entityInResult)) {
+                            entity = entityInResult;
+                            isAlreadyConnected = true;
+                            break;
+                        }
+                    }
+                    if (!isAlreadyConnected) entities.add(entityInResult);
+                }
+            }
+        } catch (SQLException e) {
             e.printStackTrace();
-        }
-        finally{
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        } finally{
             //TODO: узнать, что случится в случае null
             try{ resultSet.close(); }
             catch(SQLException e){ e.printStackTrace(); }

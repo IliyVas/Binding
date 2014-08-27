@@ -15,6 +15,7 @@ import java.util.Map;
 
 /*
  */
+//TODO: удалить лишние методы и поля из класса
 public class StoredProcedureBinding extends EntityBinding {
     private Map<QueryType, String> proceduresNames;
     private SpPropertyBinding identifier;
@@ -23,13 +24,12 @@ public class StoredProcedureBinding extends EntityBinding {
    public StoredProcedureBinding(Class entity) {
 
         super(entity);
-
         this.properties = new ArrayList<>();
+        this.proceduresNames = new HashMap<>();
 
         Field field;
         String columnName;
         String associatedEntity;
-        String entityBindingFieldName = createEntityBindingField();
         Map<QueryType, Integer> order = new HashMap<>();
         Map<Relationship, String> stateFieldsNames = new HashMap<>();
 
@@ -41,7 +41,12 @@ public class StoredProcedureBinding extends EntityBinding {
 
         try {
 
-            CtClass entityCtClass = ClassPool.getDefault().getCtClass(entity.getName());
+            CtClass entityChild = ClassPool.getDefault().makeClass(entity.getName() + postfix());
+            entityChild.setSuperclass(ClassPool.getDefault().getCtClass(entity.getName()));
+            String entityBindingFieldName = createEntityBindingField(entityChild);
+
+            if (entity.isAnnotationPresent(SelectAllProcedureName.class)) proceduresNames.put(QueryType.selectAll,
+                    ((SelectAllProcedureName) entity.getAnnotation(SelectAllProcedureName.class)).value());
 
             for (int i = 0; i < fields.length; i++) {
 
@@ -117,11 +122,15 @@ public class StoredProcedureBinding extends EntityBinding {
                 }
 
                 if (field.isAnnotationPresent(Column.class)) {
+
                     if (field.isAnnotationPresent(OneToMany.class) || field.isAnnotationPresent(ManyToOne.class))
                         throw new MultipleColumnTypeAnnotationsException();
 
                     Column columnAnnotation = field.getAnnotation(Column.class);
-                    properties.add(new SpPropertyBinding(field, columnAnnotation.name(), order));
+                    SpPropertyBinding property = new SpPropertyBinding(field, columnAnnotation.name(), order);
+                    properties.add(property);
+
+                    if (field.isAnnotationPresent(Id.class)) setIdentifier(property);
 
                 } else if (field.isAnnotationPresent(ManyToOne.class)) {
                     if (field.isAnnotationPresent(OneToMany.class))
@@ -138,7 +147,7 @@ public class StoredProcedureBinding extends EntityBinding {
                     addRelationship(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
-                            extendingGetterAndSetterMethods(field, entityBindingFieldName, newRelationship));
+                            extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
 
                 } else if (field.isAnnotationPresent(OneToMany.class)) {
 
@@ -151,15 +160,15 @@ public class StoredProcedureBinding extends EntityBinding {
                     addRelationship(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
-                            extendingGetterAndSetterMethods(field, entityBindingFieldName, newRelationship));
+                            extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
 
                 } else length--;
 
                 length++;
             }
 
-            entityCtClass.setName(entityCtClass.getName() + postfix());
-            setEntity(entityCtClass.toClass());
+
+            setEntity(entityChild.toClass());
             setEntityBindingField(getEntityClass().getDeclaredField(entityBindingFieldName));
 
             for (Relationship relationship : getRelationships()) {

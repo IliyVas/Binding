@@ -32,20 +32,15 @@ public abstract class EntityBinding {
         this.listeners = new ArrayList<>();
         this.relationships = new ArrayList<>();
         this.entity = entity;
-
-
-
     }
 
-    protected String createEntityBindingField() {
+    protected String createEntityBindingField(CtClass entityChild) {
         String entityBindingFieldName = null;
         try {
-            CtClass entityCtClass = ClassPool.getDefault().getCtClass(entity.getName());
-
             CtClass CtEntityBinding = ClassPool.getDefault().getCtClass(EntityBinding.class.getName());
-            CtField CtEntityBindingField = new CtField(CtEntityBinding, "eb" + postfix(), entityCtClass);
+            CtField CtEntityBindingField = new CtField(CtEntityBinding, "eb" + postfix(), entityChild);
 
-            entityCtClass.addField(CtEntityBindingField);
+            entityChild.addField(CtEntityBindingField);
 
             entityBindingFieldName = CtEntityBindingField.getName();
 
@@ -57,12 +52,13 @@ public abstract class EntityBinding {
     }
 
     protected String extendingGetterAndSetterMethods(Field field,
+                                                     CtClass entityChild,
                                                      String entityBindingFieldName,
                                                      Relationship relationship) {
 
         CtMethod getter, setter;
         CtField stateField;
-        String getterName, setterName;
+        String getterName, setterName, returnType, parameterType;
         String stateFieldName = null;
 
         try {
@@ -75,34 +71,45 @@ public abstract class EntityBinding {
 
             getter = entityCtClass.getDeclaredMethod(getterName);
 
+            returnType = getter.getReturnType().getName();
             //TODO: рассмотреть другие подходы
-            if (!getter.getReturnType().getName().equals(field.getType().getName()))
+            if (!returnType.equals(field.getType().getName()))
                 throw new NotFoundException("Method not found");
 
-            stateField = CtField.make("boolean isL" + postfix() + "=false;", entityCtClass);
-            entityCtClass.addField(stateField);
+            stateField = CtField.make("boolean isL" + postfix() + "=false;", entityChild);
+            entityChild.addField(stateField);
 
-            getter.insertBefore(
-                    "if(" + stateField.getName() + "== false){" +
-                            entityBindingFieldName + ".fireGettingUnloadedFieldEvent(this,\"" +
-                            relationship.getField().getName() + "\");" +
-                            stateField.getName() + "=true; }"
-            );
+            getter = CtMethod.make(
+                    returnType + " " + getterName + "() {" +
+                        "if(" + stateField.getName() + "== false){" +
+                                entityBindingFieldName + ".fireGettingUnloadedFieldEvent(this,\"" +
+                                relationship.getField().getName() + "\");" +
+                                stateField.getName() + "=true; }" +
+                        "return super." + getterName + "(); }",
+                    entityChild);
+
+            entityChild.addMethod(getter);
 
             setterName = "set" +
                     field.getName().substring(0, 1).toUpperCase() +
                     field.getName().substring(1);
 
             setter = entityCtClass.getDeclaredMethod(setterName);
+            parameterType = setter.getParameterTypes()[0].getName();
 
             if (setter.getParameterTypes().length != 1 ||
-                    !setter.getParameterTypes()[0].getName().equals(field.getType().getName()))
+                    !parameterType.equals(field.getType().getName()))
                 throw new NotFoundException("Method not found!!");
 
+
             //TODO: Добавить проверку на изменение параметра
-            setter.insertBefore(
-                    stateField.getName() + "=true;"
-            );
+            setter = CtMethod.make(
+                    "void " + setterName + "(" + parameterType +  " setterParameter) {" +
+                        stateField.getName() + "=true;" +
+                        "super." + setterName + "(setterParameter); }",
+                    entityChild);
+
+            entityChild.addMethod(setter);
 
             stateFieldName = stateField.getName();
 

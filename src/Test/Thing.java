@@ -1,15 +1,16 @@
 package Test;
 
-import Annotations.Column;
-import Annotations.ManyToOne;
-import Annotations.OneToMany;
+import Annotations.*;
 
 import java.util.List;
 
 /**
  * Created by tt on 26.08.14.
  */
+@Entity(bindingType = "StoredProsedure")
+@SelectAllProcedureName("TEST.getthobj")
 public class Thing {
+    @Id
     @Column(name="id")
     private int id;
     @Column(name= "name")
