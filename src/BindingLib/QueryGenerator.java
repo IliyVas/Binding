@@ -53,7 +53,9 @@ public class QueryGenerator  {
                             .map(r -> ((ManyToOneRelationship) r).getColumnName()).collect(Collectors.joining(", ")))
                     .append(" from ");
 
-            if (binding instanceof SimpleBinding) newQuery.append(((SimpleBinding) binding).getTableName());
+            if (binding instanceof SimpleBinding)
+                newQuery.append(((SimpleBinding) binding).getTableName()).append(" where id = ?");
+
             else newQuery.append("table(")
                     .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectAll))
                     .append("())");
@@ -63,6 +65,39 @@ public class QueryGenerator  {
         }
 
         return query;
+    }
+
+    String createSelectById(EntityBinding binding) {
+
+        String query = selectByIdCache.get(binding);
+
+        if (query == null) {
+
+            StringBuilder newQuery = new StringBuilder("select ");
+
+            newQuery.append(attributesColumns(binding))
+                    .append(' ')
+                    .append(associationsColumns(binding))
+                    .append(" from ");
+
+            if (binding instanceof SimpleBinding) newQuery.append(((SimpleBinding) binding).getTableName());
+            else newQuery.append("table(")
+                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectById))
+                    .append("(?))");
+
+            query = newQuery.toString();
+            selectByIdCache.put(binding, query);
+        }
+
+        return query;
+    }
+
+    private String attributesColumns(EntityBinding binding) {
+        return binding.getProperties().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", "));
+    }
+    private String associationsColumns(EntityBinding binding) {
+        return binding.getRelationships().stream().filter(r -> r instanceof ManyToOneRelationship)
+                .map(r -> ((ManyToOneRelationship) r).getColumnName()).collect(Collectors.joining(", "));
     }
 /*
     public String createSelectById(EntityBinding entityBinding) {

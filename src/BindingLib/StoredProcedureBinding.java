@@ -18,7 +18,6 @@ import java.util.Map;
 //TODO: удалить лишние методы и поля из класса
 public class StoredProcedureBinding extends EntityBinding {
     private Map<QueryType, String> proceduresNames;
-    private SpPropertyBinding identifier;
     private List<SpPropertyBinding> properties;
 
    public StoredProcedureBinding(Class entity) {
@@ -188,7 +187,6 @@ public class StoredProcedureBinding extends EntityBinding {
     }
 
     protected List<SpPropertyBinding> getProperties() { return properties; }
-    SpPropertyBinding getIdentifier() { return identifier; }
 
     enum OrderingType {
         //В insert и update одинаковый порядок параметров за исключением того, что в update первый параметр - id, а в

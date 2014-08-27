@@ -15,7 +15,7 @@ public class Executor {
     private Connection connection;
     private Map<Class, EntityBinding> entityBindingRepository;
     private QueryGenerator queryGenerator;
-    private ResultSetMapper propertyMapper;
+    private Mapper propertyMapper;
 
     ResultSet executeSelectAll(EntityBinding entityBinding) throws SQLException {
         PreparedStatement query;

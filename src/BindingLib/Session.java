@@ -1,11 +1,8 @@
 package BindingLib;
 
 import Annotations.Entity;
-import javassist.ClassPool;
-import oracle.jdbc.OracleCallableStatement;
-import oracle.jdbc.OracleConnection;
+import Annotations.OneToMany;
 import oracle.jdbc.OraclePreparedStatement;
-import oracle.jdbc.OracleResultSet;
 import org.reflections.Reflections;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
@@ -27,7 +24,7 @@ public class Session implements AttemptToGetUnloadedFieldListener {
     private Executor executor;
     private QueryGenerator queryGenerator;
     private Cache cache;
-    private Map<EntityBinding, List> connectedEntities;
+    private Map<EntityBinding, List> sessionEntities;
     //TODO: возможно стоит добавить statement cache
 
     public Session(String url, String dbUser, String password) {
@@ -38,7 +35,7 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         this.executor = new Executor();
         this.entityBindingRepository = new Hashtable<>();
         this.queryGenerator = new QueryGenerator();
-        this.connectedEntities = new HashMap<>();
+        this.sessionEntities = new HashMap<>();
 
         Reflections reflections = new Reflections("Test");
         Set<Class<? extends Object>> classes = reflections.getTypesAnnotatedWith(Entity.class);
@@ -68,8 +65,7 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         }
     }
 
-    public void loadDependencies(EntityBinding entityBinding, Object obj) {
-
+    public void loadDependencies(Object obj, Relationship relationship) {
     }
 
     public Connection getConnection() {
@@ -84,10 +80,6 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         throw new NotImplementedException();
     }
 
-
-
-
-
     public WhereStatementPart get(Class entityClass) { return new WhereStatementPart(entityBindingRepository.get(entityClass)); }
 
     //TODO: подумать над реализацией в отдельном классе
@@ -96,35 +88,20 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         EntityBinding entityBinding = entityBindingRepository.get(entityClass);
 
         ResultSet resultSet = null;
-        PreparedStatement statement = null;
+        OraclePreparedStatement statement = null;
 
         try {
             statement =
-                    /*(OraclePreparedStatement) unimplemented feature*/
-                    connection.prepareStatement(queryGenerator.createSelectAll(entityBinding));
+                    (OraclePreparedStatement)connection.prepareStatement(queryGenerator.createSelectAll(entityBinding));
 
             resultSet = statement.executeQuery();
-            resultEntities = ResultSetMapper.createEntities(resultSet, entityBinding);
 
-            List entities = connectedEntities.get(entityBinding);
-            if (entities == null) connectedEntities.put(entityBinding, resultEntities);
-            else {
-                Field identifier = entityBinding.getIdentifier().getField();
-                for (Object entityInResult : resultEntities) {
-                    boolean isAlreadyConnected = false;
-                    for (Object entity : entities) {
-                        if (identifier.get(entity) == identifier.get(entityInResult)) {
-                            entity = entityInResult;
-                            isAlreadyConnected = true;
-                            break;
-                        }
-                    }
-                    if (!isAlreadyConnected) entities.add(entityInResult);
-                }
-            }
+
+
+            resultEntities =
+                    Mapper.mapResultSetToEntities(resultSet, entityBinding, getSessionEntities(entityBinding));
+
         } catch (SQLException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
             e.printStackTrace();
         } finally{
             //TODO: узнать, что случится в случае null
@@ -137,8 +114,40 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         return resultEntities;
     }
 
+    public <T> T getById(Class<T> entityClass, Object id) {
+        T entity = null;
+        EntityBinding entityBinding = entityBindingRepository.get(entityClass);
+
+        ResultSet resultSet = null;
+        OraclePreparedStatement statement = null;
+
+        try {
+            statement =
+                   (OraclePreparedStatement)connection.prepareStatement(queryGenerator.createSelectById(entityBinding));
+
+            statement.setObject(1, id);
+            resultSet = statement.executeQuery();
+
+            //TODO: как вывести тип?
+            entity = Mapper.mapResultSetToEntity(resultSet, entityBinding, getSessionEntities(entityBinding));
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return entity;
+    }
+
     public Map<Class, EntityBinding> getEntityBindingRepository() {
         return entityBindingRepository;
+    }
+
+    private List getSessionEntities(EntityBinding entityBinding) {
+        List sessionEntities = this.sessionEntities.get(entityBinding);
+        if (sessionEntities == null) {
+            sessionEntities = new ArrayList<>();
+            this.sessionEntities.put(entityBinding, sessionEntities);
+        }
+        return sessionEntities;
     }
 
 }

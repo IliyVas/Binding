@@ -125,8 +125,17 @@ public abstract class EntityBinding {
     }
 
     public void fireGettingUnloadedFieldEvent(Object obj, String fieldName) {
+        Relationship relationship = null;
+
+        for (Relationship rs : relationships) {
+            if (rs.getField().getName().equals(fieldName)) {
+                relationship = rs;
+                break;
+            }
+        }
+
         for (AttemptToGetUnloadedFieldListener listener : listeners) {
-            listener.loadDependencies(this, obj);
+            listener.loadDependencies(obj, relationship);
         }
     }
 
@@ -162,6 +171,11 @@ public abstract class EntityBinding {
 
     public void setEntityBindingField(Field entityBindingField) {
         this.entityBindingField = entityBindingField;
+        entityBindingField.setAccessible(true);
+    }
+
+    public Field getEntityBindingField() {
+        return entityBindingField;
     }
 }
 

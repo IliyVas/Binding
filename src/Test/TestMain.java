@@ -16,7 +16,10 @@ public class TestMain {
         Session session = new Session("jdbc:oracle:thin:@localhost:1521:XE", "SYSTEM", "123");
         session.open();
         List<Box> list = session.getAll(Box.class);
-        list.forEach(e -> System.out.println(e.getId()+" "+e.getName()));
+        list.forEach(e -> {
+            System.out.println(e.getId()+" "+e.getName());
+            e.getThings();
+        });
 
     }
 }
