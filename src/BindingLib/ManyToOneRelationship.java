@@ -5,7 +5,7 @@ import java.lang.reflect.Field;
 /**
  * Created by tt on 24.08.14.
  */
-class ManyToOneRelationship extends Relationship implements EntityField {
+class ManyToOneRelationship extends Relationship implements EntityFieldAssociatedWithColumn {
     private String fkColumnName;
 
     ManyToOneRelationship(Field field, String fkColumnName, String associatedEntity) {

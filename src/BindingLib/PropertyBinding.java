@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
 /**
  *
  */
-class PropertyBinding implements EntityField {
+class PropertyBinding implements EntityFieldAssociatedWithColumn {
     private Field field;
     private String columnName;
 

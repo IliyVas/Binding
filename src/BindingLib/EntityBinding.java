@@ -22,6 +22,7 @@ public abstract class EntityBinding {
     private Class entity;
     private PropertyBinding identifier;
     private List<Relationship> relationships;
+    private List<EntityField> fields;
     //TODO: Возможно нужно оставить только одного "слушателя"
     private List<AttemptToGetUnloadedFieldListener> listeners;
 
@@ -31,6 +32,7 @@ public abstract class EntityBinding {
 
         this.listeners = new ArrayList<>();
         this.relationships = new ArrayList<>();
+        this.fields = new ArrayList<>();
         this.entity = entity;
     }
 
@@ -142,20 +144,24 @@ public abstract class EntityBinding {
     Class getEntityClass() { return this.entity; }
 
 
-    abstract <T extends PropertyBinding> List<T> getProperties();
+    abstract <T extends EntityFieldAssociatedWithColumn> List<T> getAttributeFields();
 
-    protected List<Relationship> getRelationships() {
+    List<Relationship> getRelationships() {
         return relationships;
     }
+
+    List<EntityField> getFieldsProperties() { return fields; }
 
     PropertyBinding getIdentifier() { return identifier; }
 
 
 
 
-    protected void addRelationship(Relationship relationship) {
+    void addRelationship(Relationship relationship) {
         relationships.add(relationship);
     }
+
+    void addField(EntityField field) { fields.add(field);}
 
     protected String postfix() {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("mmnnnnnnnnnss"));

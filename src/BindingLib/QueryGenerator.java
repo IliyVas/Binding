@@ -47,10 +47,8 @@ public class QueryGenerator  {
 
             StringBuilder newQuery = new StringBuilder("select ");
 
-            newQuery.append(binding.getProperties().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", ")))
-                    .append(' ')
-                    .append(binding.getRelationships().stream().filter(r -> r instanceof ManyToOneRelationship)
-                            .map(r -> ((ManyToOneRelationship) r).getColumnName()).collect(Collectors.joining(", ")))
+            newQuery.append(binding.getAttributeFields().stream()
+                    .map(p -> p.getColumnName()).collect(Collectors.joining(", ")))
                     .append(" from ");
 
             if (binding instanceof SimpleBinding)
@@ -75,14 +73,12 @@ public class QueryGenerator  {
 
             StringBuilder newQuery = new StringBuilder("select ");
 
-            newQuery.append(attributesColumns(binding))
-                    .append(' ')
-                    .append(associationsColumns(binding))
+            newQuery.append(selectColumns(binding))
                     .append(" from ");
 
             if (binding instanceof SimpleBinding) newQuery.append(((SimpleBinding) binding).getTableName());
             else newQuery.append("table(")
-                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectById))
+                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectAll))
                     .append("(?))");
 
             query = newQuery.toString();
@@ -92,13 +88,39 @@ public class QueryGenerator  {
         return query;
     }
 
-    private String attributesColumns(EntityBinding binding) {
-        return binding.getProperties().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", "));
+    String createInsert(EntityBinding binding) {
+
+        String query = insertCache.get(binding);
+
+        if (query == null) {
+
+            StringBuilder newQuery = new StringBuilder();
+
+            if (binding instanceof SimpleBinding) {}
+
+            else {
+                newQuery.append("call(")
+                        .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.insert))
+                        .append("(")
+                        .append(settableFields(binding))
+                        .append("))");
+                query = newQuery.toString();
+                insertCache.put(binding, query);
+            }
+        }
+
+        return query;
     }
-    private String associationsColumns(EntityBinding binding) {
-        return binding.getRelationships().stream().filter(r -> r instanceof ManyToOneRelationship)
-                .map(r -> ((ManyToOneRelationship) r).getColumnName()).collect(Collectors.joining(", "));
+
+    private String selectColumns(EntityBinding binding) {
+        return binding.getAttributeFields().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", "));
     }
+
+    private String settableFields(EntityBinding binding) {
+        return binding.getAttributeFields().stream().map(f -> "?").collect(Collectors.joining(", "));
+    }
+
+
 /*
     public String createSelectById(EntityBinding entityBinding) {
 

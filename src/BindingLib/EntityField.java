@@ -7,6 +7,4 @@ import java.lang.reflect.Field;
  */
 interface EntityField {
     Field getField();
-    String getColumnName();
-
 }

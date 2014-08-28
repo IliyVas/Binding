@@ -66,18 +66,10 @@ public class Mapper {
         }
 
         //TODO: сделать через интерфейсы
-        for (PropertyBinding property : entityBinding.getProperties()) {
+        for (EntityFieldAssociatedWithColumn attribute : entityBinding.getAttributeFields()) {
             columnValue =
-                    getColumnValue(property.getColumnName(), property.getField().getType(), resultSet);
-            property.getField().set(entity, columnValue);
-        }
-        for (Relationship relationship :entityBinding.getRelationships()) {
-            if (relationship instanceof ManyToOne) {
-                columnValue = getColumnValue(((ManyToOneRelationship)relationship).getColumnName(),
-                        relationship.getField().getType(), resultSet);
-
-                relationship.getField().set(entity, columnValue);
-            }
+                    getColumnValue(attribute.getColumnName(), attribute.getField().getType(), resultSet);
+            attribute.getField().set(entity, columnValue);
         }
 
         entityBinding.getEntityBindingField().set(entity, entityBinding);

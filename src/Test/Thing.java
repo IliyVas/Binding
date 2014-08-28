@@ -9,6 +9,7 @@ import java.util.List;
  */
 @Entity(bindingType = "StoredProsedure")
 @SelectAllProcedureName("TEST.getthobj")
+@InsertProcedureName("TEST.insertthobj")
 public class Thing {
     @Id
     @Column(name="id")
@@ -16,13 +17,13 @@ public class Thing {
     @Column(name= "name")
     private String name;
     @ManyToOne(associatedEntity = "Test.Box", fkColumnName = "box_id")
-    private List<Thing> things;
+    private Box box;
 
-    public List<Thing> getThings() {
-        return things;
+    public Box getBox() {
+        return box;
     }
 
-    public void setThings(List<Thing> things) {
-        this.things = things;
+    public void setBox(Box box) {
+        this.box = box;
     }
 }

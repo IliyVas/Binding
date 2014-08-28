@@ -2,6 +2,8 @@ package BindingLib;
 
 import Annotations.Entity;
 import Annotations.OneToMany;
+import Exceptions.NoSuchObjectInSessionException;
+import oracle.jdbc.OracleCallableStatement;
 import oracle.jdbc.OraclePreparedStatement;
 import org.reflections.Reflections;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
@@ -37,6 +39,7 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         this.queryGenerator = new QueryGenerator();
         this.sessionEntities = new HashMap<>();
 
+        Reflections.log = null;
         Reflections reflections = new Reflections("Test");
         Set<Class<? extends Object>> classes = reflections.getTypesAnnotatedWith(Entity.class);
         for (Class<? extends  Object> clazz : classes) {
@@ -137,6 +140,126 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         return entity;
     }
 
+    public <T> T create(Class<T> entityClass, Object... attributes ) {
+
+        boolean attributesContainsId;
+        T entity = null;
+        OracleCallableStatement statement;
+        EntityField entityField;
+        EntityBinding entityBinding = entityBindingRepository.get(entityClass);
+
+        try {
+            if (attributes.length == entityBinding.getFieldsProperties().size()) attributesContainsId = true;
+            else if (attributes.length == entityBinding.getFieldsProperties().size() - 1) attributesContainsId = false;
+            else throw new IllegalArgumentException("wrong number of parameters");
+
+            entity = (T) entityBinding.getEntityClass().newInstance();
+            ListIterator<EntityField> iterator = entityBinding.getFieldsProperties().listIterator();
+
+            for (int i = 0; i < attributes.length; i++) {
+
+                entityField = iterator.next();
+                if (entityField == entityBinding.getIdentifier()) {
+                    if (attributesContainsId == true) {
+
+                        Field id = entityBinding.getIdentifier().getField();
+
+                        for (Object sessionEntity : getSessionEntities(entityBinding)) {
+                            if (id.get(sessionEntity) == attributes[i])
+                                throw new IllegalArgumentException("Object with such id already exists");
+                        }
+                    }
+                    else {
+                        entityField = iterator.next();
+                    }
+                }
+
+                //TODO: нужна ли проверка на совместимость типов?
+                entityField.getField().set(entity, attributes[i]);
+            }
+
+            statement = (OracleCallableStatement) connection.prepareCall(queryGenerator.createInsert(entityBinding));
+
+            if (entityBinding instanceof SimpleBinding) {}
+            else {
+
+                for (EntityField fieldProperty : entityBinding.getFieldsProperties()) {
+
+                    if (fieldProperty instanceof SpPropertyBinding) {
+
+                        statement.setObject(((SpPropertyBinding) fieldProperty).getOrder(QueryType.insert),
+                                fieldProperty.getField().get(entity));
+
+                    } else if (fieldProperty instanceof SpManyToOneRelationship) {
+
+                        SpManyToOneRelationship relationship = (SpManyToOneRelationship) fieldProperty;
+                        EntityBinding parentBinding = entityBindingRepository.get(relationship.getAssociatedEntity());
+                        Field parentPK = parentBinding.getIdentifier().getField();
+                        Object parent = relationship.getField().get(entity);
+                        boolean isParentExists = false;
+
+                        if (parent == null) {
+                            statement.setNull(relationship.getOrder(QueryType.insert), Types.NUMERIC);
+                        } else {
+
+                            for (Object sessionEntity : getSessionEntities(parentBinding)) {
+                                if (parentPK.get(sessionEntity) == parentPK.get(parent)) {
+                                    isParentExists = true;
+                                    break;
+                                }
+                            }
+
+                            if (isParentExists) {
+                                statement.setObject(relationship.getOrder(QueryType.insert),
+                                        parentPK.get(parent));
+
+                                for (Relationship parentRelationship : parentBinding.getRelationships()) {
+                                    if (parentRelationship instanceof OneToManyRelationship) {
+                                        if (((OneToManyRelationship) parentRelationship).getAssociatedField() ==
+                                                relationship.getField().getName()) {
+                                            ((List) parentRelationship.getField().get(parent)).add(entity);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else {
+                                throw new NoSuchObjectInSessionException();
+                            }
+                        }
+                    } else if (fieldProperty instanceof OneToManyRelationship) {
+                        List fieldObjects = (List) fieldProperty.getField().get(entity);
+                        Field fkField =
+                                ((OneToManyRelationship) fieldProperty).getAssociatedEntity()
+                                        .getDeclaredField(((OneToManyRelationship) fieldProperty).getAssociatedField());
+                        if (fieldObjects != null) {
+                            for (Object fieldObject : fieldObjects) {
+                                boolean isExists = false;
+                                for (Object sessionEntity : getSessionEntities(entityBinding)) {
+                                    if (fieldObject == sessionEntity) {
+                                        isExists = true;
+                                        break;
+                                    }
+                                }
+                                if (!isExists) throw new NoSuchObjectInSessionException();
+                            }
+                        }
+                    }
+                }
+            }
+
+            statement.execute();
+
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SQLException e) {
+            e.printStackTrace();
+        } catch (NoSuchObjectInSessionException e) {
+            e.printStackTrace();
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+
+        return entity;
+    }
+
     public Map<Class, EntityBinding> getEntityBindingRepository() {
         return entityBindingRepository;
     }
@@ -149,6 +272,5 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         }
         return sessionEntities;
     }
-
 }
 

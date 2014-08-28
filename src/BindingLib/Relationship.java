@@ -7,7 +7,7 @@ import java.lang.reflect.Field;
  */
 
 //TODO: пересмотреть
-class Relationship {
+class Relationship implements EntityField{
     private Class associatedEntity;
     private Field field;
     private Field isDependenciesLoadedField;
@@ -22,7 +22,7 @@ class Relationship {
         }
     }
 
-    protected Field getField() { return field; }
+    public Field getField() { return field; }
 
     public Field getIsDependenciesLoadedField() {
         return isDependenciesLoadedField;
@@ -30,5 +30,9 @@ class Relationship {
 
     public void setIsDependenciesLoadedField(Field isDependenciesLoaded) {
         this.isDependenciesLoadedField = isDependenciesLoaded;
+    }
+
+    public Class getAssociatedEntity() {
+        return associatedEntity;
     }
 }

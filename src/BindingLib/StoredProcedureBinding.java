@@ -18,12 +18,12 @@ import java.util.Map;
 //TODO: удалить лишние методы и поля из класса
 public class StoredProcedureBinding extends EntityBinding {
     private Map<QueryType, String> proceduresNames;
-    private List<SpPropertyBinding> properties;
+    private List<SpEntityFieldAssociatedWithColumn> attributeFields;
 
-   public StoredProcedureBinding(Class entity) {
+    public StoredProcedureBinding(Class entity) {
 
         super(entity);
-        this.properties = new ArrayList<>();
+        this.attributeFields = new ArrayList<>();
         this.proceduresNames = new HashMap<>();
 
         Field field;
@@ -35,7 +35,7 @@ public class StoredProcedureBinding extends EntityBinding {
         Field[] fields = entity.getDeclaredFields();
         boolean[] usedInsertPositions = new boolean[fields.length];
         boolean[] usedUpdatePositions = new boolean[fields.length];
-        byte length = 0; //Число полей, помеченных @Column или @ManyToOne
+        int length = 0; //Число полей, помеченных @Column или @ManyToOne
         OrderingType orderingType = OrderingType.unknown;
 
         try {
@@ -46,6 +46,8 @@ public class StoredProcedureBinding extends EntityBinding {
 
             if (entity.isAnnotationPresent(SelectAllProcedureName.class)) proceduresNames.put(QueryType.selectAll,
                     ((SelectAllProcedureName) entity.getAnnotation(SelectAllProcedureName.class)).value());
+            if (entity.isAnnotationPresent(InsertProcedureName.class)) proceduresNames.put(QueryType.insert,
+                    ((InsertProcedureName) entity.getAnnotation(InsertProcedureName.class)).value());
 
             for (int i = 0; i < fields.length; i++) {
 
@@ -74,7 +76,7 @@ public class StoredProcedureBinding extends EntityBinding {
 
                     usedUpdatePositions[value - 1] = true;
                     usedInsertPositions[value - 1] = true;
-                    order.put(QueryType.update, value + 1);
+                    order.put(QueryType.update, value);
                     order.put(QueryType.insert, value);
                     if (orderingType == OrderingType.unknown) orderingType = OrderingType.general;
 
@@ -100,7 +102,7 @@ public class StoredProcedureBinding extends EntityBinding {
                     usedUpdatePositions[orderInUpdate - 1] = true;
                     order.put(QueryType.update, orderInUpdate);
                     order.put(QueryType.insert, orderInInsert);
-
+    
                     if (orderingType != OrderingType.custom) orderingType = OrderingType.custom;
 
                 } else {
@@ -109,15 +111,11 @@ public class StoredProcedureBinding extends EntityBinding {
                        (length > 1 || orderingType != OrderingType.unknown))
                         throw new BadOrderValueException();
 
-                    if (!field.isAnnotationPresent(Id.class)) {
 
-                        //TODO: возможно нужно добавить проверку на OneToMany
-                        order.put(QueryType.insert, length + 1);
-
-                        if (orderingType != OrderingType.defaultOrder) orderingType = OrderingType.defaultOrder;
-                    }
+                    if (orderingType != OrderingType.defaultOrder) orderingType = OrderingType.defaultOrder;
 
                     order.put(QueryType.update, length + 1);
+                    order.put(QueryType.insert, length + 1);
                 }
 
                 if (field.isAnnotationPresent(Column.class)) {
@@ -127,7 +125,8 @@ public class StoredProcedureBinding extends EntityBinding {
 
                     Column columnAnnotation = field.getAnnotation(Column.class);
                     SpPropertyBinding property = new SpPropertyBinding(field, columnAnnotation.name(), order);
-                    properties.add(property);
+                    attributeFields.add(property);
+                    addField(property);
 
                     if (field.isAnnotationPresent(Id.class)) setIdentifier(property);
 
@@ -144,6 +143,8 @@ public class StoredProcedureBinding extends EntityBinding {
                                     manyToOneAnnotation.fkColumnName(), associatedEntity, order);
 
                     addRelationship(newRelationship);
+                    attributeFields.add(newRelationship);
+                    addField(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
                             extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
@@ -157,6 +158,7 @@ public class StoredProcedureBinding extends EntityBinding {
                             oneToManyAnnotation.associatedField());
 
                     addRelationship(newRelationship);
+                    addField(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
                             extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
@@ -186,7 +188,7 @@ public class StoredProcedureBinding extends EntityBinding {
         return proceduresNames.get(queryType);
     }
 
-    protected List<SpPropertyBinding> getProperties() { return properties; }
+    List<SpEntityFieldAssociatedWithColumn> getAttributeFields() { return attributeFields; }
 
     enum OrderingType {
         //В insert и update одинаковый порядок параметров за исключением того, что в update первый параметр - id, а в
