@@ -112,6 +112,29 @@ public class QueryGenerator  {
         return query;
     }
 
+    String createUpdate(EntityBinding binding) {
+
+        String query = updateCache.get(binding);
+
+        if (query == null) {
+
+            StringBuilder newQuery = new StringBuilder();
+
+            if (binding instanceof SimpleBinding) {}
+            else {
+                newQuery.append("call(")
+                        .append((((StoredProcedureBinding) binding).getProcedureName(QueryType.update)))
+                        .append("(")
+                        .append(settableFields(binding))
+                        .append("))");
+                query = newQuery.toString();
+                updateCache.put(binding, query);
+            }
+        }
+
+        return query;
+    }
+
     private String selectColumns(EntityBinding binding) {
         return binding.getAttributeFields().stream().map(p -> p.getColumnName()).collect(Collectors.joining(", "));
     }

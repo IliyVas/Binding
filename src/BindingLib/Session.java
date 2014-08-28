@@ -203,13 +203,13 @@ public class Session implements AttemptToGetUnloadedFieldListener {
                         } else {
 
                             for (Object sessionEntity : getSessionEntities(parentBinding)) {
-                                if (parentPK.get(sessionEntity) == parentPK.get(parent)) {
+                                if (sessionEntity == parent) {
                                     isParentExists = true;
                                     break;
                                 }
                             }
 
-                            if (isParentExists) {
+                            if (isParentExists == true) {
                                 statement.setObject(relationship.getOrder(QueryType.insert),
                                         parentPK.get(parent));
 
@@ -258,6 +258,94 @@ public class Session implements AttemptToGetUnloadedFieldListener {
         }
 
         return entity;
+    }
+
+    public void updateAll(Class entityClass) {
+
+        EntityBinding binding = entityBindingRepository.get(entityClass);
+        List sessionEntities = getSessionEntities(binding);
+
+        try {
+            if (binding instanceof SimpleBinding) {
+            } else {
+                OracleCallableStatement cStatement =
+                        (OracleCallableStatement) connection.prepareCall(queryGenerator.createUpdate(binding));
+
+                for (Object entity : sessionEntities) {
+
+                    for (EntityField fieldProperty : binding.getFieldsProperties()) {
+
+                        if (fieldProperty instanceof SpPropertyBinding) {
+
+                            cStatement.setObject(((SpPropertyBinding) fieldProperty).getOrder(QueryType.update),
+                                    fieldProperty.getField().get(entity));
+
+                        } else if (fieldProperty instanceof SpManyToOneRelationship) {
+
+                            SpManyToOneRelationship relationship = (SpManyToOneRelationship) fieldProperty;
+                            EntityBinding parentBinding = entityBindingRepository.get(relationship.getAssociatedEntity());
+                            Field parentPK = parentBinding.getIdentifier().getField();
+                            Object parent = relationship.getField().get(entity);
+                            boolean isParentExists = false;
+
+                            if (parent == null) {
+                                cStatement.setNull(relationship.getOrder(QueryType.insert), Types.NUMERIC);
+                            } else {
+
+                                for (Object sessionEntity : getSessionEntities(parentBinding)) {
+                                    if (sessionEntity == parent) {
+                                        isParentExists = true;
+                                        break;
+                                    }
+                                }
+
+                                if (isParentExists) {
+                                    cStatement.setObject(relationship.getOrder(QueryType.insert),
+                                            parentPK.get(parent));
+
+                                    for (Relationship parentRelationship : parentBinding.getRelationships()) {
+                                        if (parentRelationship instanceof OneToManyRelationship) {
+                                            if (((OneToManyRelationship) parentRelationship).getAssociatedField() ==
+                                                    relationship.getField().getName()) {
+                                                ((List) parentRelationship.getField().get(parent)).add(entity);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    throw new NoSuchObjectInSessionException();
+                                }
+                            }
+                        } else if (fieldProperty instanceof OneToManyRelationship) {
+                            List fieldObjects = (List) fieldProperty.getField().get(entity);
+                            Field fkField =
+                                    ((OneToManyRelationship) fieldProperty).getAssociatedEntity()
+                                            .getDeclaredField(((OneToManyRelationship) fieldProperty).getAssociatedField());
+                            if (fieldObjects != null) {
+                                for (Object fieldObject : fieldObjects) {
+                                    boolean isExists = false;
+                                    for (Object sessionEntity : getSessionEntities(binding)) {
+                                        if (fieldObject == sessionEntity) {
+                                            isExists = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!isExists) throw new NoSuchObjectInSessionException();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } catch (NoSuchFieldException e) {
+            e.printStackTrace();
+        } catch (NoSuchObjectInSessionException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
     }
 
     public Map<Class, EntityBinding> getEntityBindingRepository() {
