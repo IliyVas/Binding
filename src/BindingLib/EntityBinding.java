@@ -23,7 +23,6 @@ public abstract class EntityBinding {
     private PropertyBinding identifier;
     private List<Relationship> relationships;
     private List<EntityField> fields;
-    //TODO: Возможно нужно оставить только одного "слушателя"
     private List<AttemptToGetUnloadedFieldListener> listeners;
 
     private Field entityBindingField;
@@ -36,21 +35,29 @@ public abstract class EntityBinding {
         this.entity = entity;
     }
 
-    protected String createEntityBindingField(CtClass entityChild) {
-        String entityBindingFieldName = null;
+    CtClass createWrapperClass() {
+
+        ClassPool cp = ClassPool.getDefault();
+        CtClass ctWrapperClass = cp.makeClass("wrapper"+postfix());
+
         try {
-            CtClass CtEntityBinding = ClassPool.getDefault().getCtClass(EntityBinding.class.getName());
-            CtField CtEntityBindingField = new CtField(CtEntityBinding, "eb" + postfix(), entityChild);
 
-            entityChild.addField(CtEntityBindingField);
+            CtClass ctWrappedClass = cp.getCtClass(entity.getName());
+            CtField ctWrappedObjectField = new CtField(ctWrappedClass, "wrappedObject", ctWrapperClass);
+            ctWrapperClass.addField(ctWrappedObjectField);
 
-            entityBindingFieldName = CtEntityBindingField.getName();
+            CtClass ctEntityBinding
+                    = ClassPool.getDefault().getCtClass(EntityBinding.class.getName());
+            CtField ctEntityBindingField = new CtField(ctEntityBinding, "entityBinding", ctWrapperClass);
+            ctWrapperClass.addField(ctEntityBindingField);
 
-        } catch (CannotCompileException | NotFoundException e) {
+        } catch (NotFoundException e) {
+            e.printStackTrace();
+        } catch (CannotCompileException e) {
             e.printStackTrace();
         }
 
-        return entityBindingFieldName;
+        return ctWrapperClass;
     }
 
     protected String extendingGetterAndSetterMethods(Field field,
@@ -153,8 +160,6 @@ public abstract class EntityBinding {
     List<EntityField> getFieldsProperties() { return fields; }
 
     PropertyBinding getIdentifier() { return identifier; }
-
-
 
 
     void addRelationship(Relationship relationship) {

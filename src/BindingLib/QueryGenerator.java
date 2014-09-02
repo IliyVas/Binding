@@ -1,11 +1,7 @@
 package BindingLib;
 
-import Annotations.ManyToOne;
 import oracle.jdbc.OraclePreparedStatement;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-import java.lang.reflect.Method;
-import java.sql.Connection;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -55,7 +51,7 @@ public class QueryGenerator  {
                 newQuery.append(((SimpleBinding) binding).getTableName()).append(" where id = ?");
 
             else newQuery.append("table(")
-                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectAll))
+                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.select))
                     .append("())");
 
             query = newQuery.toString();
@@ -78,7 +74,7 @@ public class QueryGenerator  {
 
             if (binding instanceof SimpleBinding) newQuery.append(((SimpleBinding) binding).getTableName());
             else newQuery.append("table(")
-                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.selectAll))
+                    .append(((StoredProcedureBinding) binding).getProcedureName(QueryType.select))
                     .append("(?))");
 
             query = newQuery.toString();

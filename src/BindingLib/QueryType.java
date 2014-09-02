@@ -4,7 +4,7 @@ package BindingLib;
  */
 enum QueryType {
     selectById,
-    selectAll,
+    select,
     insert,
     update,
     delete,

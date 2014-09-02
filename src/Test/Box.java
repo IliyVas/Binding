@@ -8,7 +8,7 @@ import java.util.List;
  * Created by tt on 26.08.14.
  */
 @Entity(bindingType = "StoredProsedure")
-@SelectAllProcedureName("TEST.getobj")
+@SelectProcedureName("TEST.getobj")
 @InsertProcedureName("TEST.insertobj")
 public class Box {
     @Id

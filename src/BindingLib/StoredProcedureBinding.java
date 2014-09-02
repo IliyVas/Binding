@@ -1,13 +1,11 @@
 package BindingLib;
 
 import Annotations.*;
-import Exceptions.BadOrderValueException;
-import Exceptions.MultipleColumnTypeAnnotationsException;
-import Exceptions.MultipleOrderAnnotationsException;
-import Exceptions.NoOrderAnnotationException;
+import Exceptions.*;
 import javassist.*;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,27 +30,83 @@ public class StoredProcedureBinding extends EntityBinding {
         Map<QueryType, Integer> order = new HashMap<>();
         Map<Relationship, String> stateFieldsNames = new HashMap<>();
 
-        Field[] fields = entity.getDeclaredFields();
-        boolean[] usedInsertPositions = new boolean[fields.length];
-        boolean[] usedUpdatePositions = new boolean[fields.length];
-        int length = 0; //Число полей, помеченных @Column или @ManyToOne
-        OrderingType orderingType = OrderingType.unknown;
-
         try {
 
-            CtClass entityChild = ClassPool.getDefault().makeClass(entity.getName() + postfix());
-            entityChild.setSuperclass(ClassPool.getDefault().getCtClass(entity.getName()));
-            String entityBindingFieldName = createEntityBindingField(entityChild);
+            CtClass ctWrapperClass = createWrapperClass();
+            ctWrapperClass.setSuperclass(ClassPool.getDefault().getCtClass(entity.getName()));
 
-            if (entity.isAnnotationPresent(SelectAllProcedureName.class)) proceduresNames.put(QueryType.selectAll,
-                    ((SelectAllProcedureName) entity.getAnnotation(SelectAllProcedureName.class)).value());
+            if (entity.isAnnotationPresent(ProceduresNamesPattern.class)) {
+
+                String pattern = ((ProceduresNamesPattern) entity.getAnnotation(ProceduresNamesPattern.class)).value();
+
+                if (pattern.equals("")) throw new BadAnnotationValueException();
+
+                if (pattern.contains("<prefix>")) {
+
+                    String selectPrefix = "get";
+                    String updatePrefix = "update";
+                    String insertPrefix = "insert";
+                    String deletePrefix = "delete";
+
+                    if (entity.isAnnotationPresent(ProceduresPrefixes.class)) {
+
+                        ProceduresPrefixes prefixes =
+                                (ProceduresPrefixes) entity.getAnnotation(ProceduresPrefixes.class);
+                        selectPrefix = prefixes.select();
+                        updatePrefix = prefixes.update();
+                        insertPrefix = prefixes.insert();
+                        deletePrefix = prefixes.delete();
+
+                    }
+
+                    proceduresNames.put(QueryType.select, pattern.replace("<prefix>", selectPrefix));
+                    proceduresNames.put(QueryType.update, pattern.replace("<prefix>", updatePrefix));
+                    proceduresNames.put(QueryType.insert, pattern.replace("<prefix>", insertPrefix));
+                    proceduresNames.put(QueryType.delete, pattern.replace("<prefix>", deletePrefix));
+                }
+            }
+
+            if (entity.isAnnotationPresent(SelectProcedureName.class)) proceduresNames.put(QueryType.select,
+                    ((SelectProcedureName) entity.getAnnotation(SelectProcedureName.class)).value());
             if (entity.isAnnotationPresent(InsertProcedureName.class)) proceduresNames.put(QueryType.insert,
                     ((InsertProcedureName) entity.getAnnotation(InsertProcedureName.class)).value());
+            if (entity.isAnnotationPresent(UpdateProcedureName.class)) proceduresNames.put(QueryType.update,
+                    ((UpdateProcedureName) entity.getAnnotation(UpdateProcedureName.class)).value());
+            if (entity.isAnnotationPresent(DeleteProcedureName.class)) proceduresNames.put(QueryType.delete,
+                    ((DeleteProcedureName) entity.getAnnotation(DeleteProcedureName.class)).value());
+
+            String methodName;
+            String fieldName;
+
+            Field[] fields = entity.getDeclaredFields();
+            Method[] methods = entity.getMethods();
+            boolean[] usedInsertPositions = new boolean[fields.length];
+            boolean[] usedUpdatePositions = new boolean[fields.length];
+            int length = 0; //Число полей, помеченных @Column или @ManyToOne
+            OrderingType orderingType = OrderingType.unknown;
+
+            for (Method method : methods) {
+
+                fieldName = "";
+                methodName = method.getName();
+
+                if (methodName.indexOf("get") == 0) {
+                    fieldName = methodName.substring(3, 4).toLowerCase() + methodName.substring(4);
+                }
+                if (methodName.indexOf("is") == 0) {
+                    fieldName = methodName.substring(2, 3).toLowerCase() + methodName.substring(3);
+                }
+                if (!fieldName.equals("")) {
+
+                }
+            }
 
             for (int i = 0; i < fields.length; i++) {
 
                 field = fields[i];
                 order.clear();
+
+
 
                 if (field.isAnnotationPresent(Order.class)) {
 
@@ -147,7 +201,7 @@ public class StoredProcedureBinding extends EntityBinding {
                     addField(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
-                            extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
+                            extendingGetterAndSetterMethods(field,ctWrapperClass,entityBindingFieldName,newRelationship));
 
                 } else if (field.isAnnotationPresent(OneToMany.class)) {
 
@@ -161,7 +215,7 @@ public class StoredProcedureBinding extends EntityBinding {
                     addField(newRelationship);
 
                     stateFieldsNames.put(newRelationship,
-                            extendingGetterAndSetterMethods(field,entityChild,entityBindingFieldName,newRelationship));
+                            extendingGetterAndSetterMethods(field,ctWrapperClass,entityBindingFieldName,newRelationship));
 
                 } else length--;
 
@@ -169,7 +223,7 @@ public class StoredProcedureBinding extends EntityBinding {
             }
 
 
-            setEntity(entityChild.toClass());
+            setEntity(ctWrapperClass.toClass());
             setEntityBindingField(getEntityClass().getDeclaredField(entityBindingFieldName));
 
             for (Relationship relationship : getRelationships()) {
