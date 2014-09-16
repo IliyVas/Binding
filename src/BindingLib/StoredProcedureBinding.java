@@ -24,12 +24,6 @@ public class StoredProcedureBinding extends EntityBinding {
         this.attributeFields = new ArrayList<>();
         this.proceduresNames = new HashMap<>();
 
-        Field field;
-        String columnName;
-        String associatedEntity;
-        Map<QueryType, Integer> order = new HashMap<>();
-        Map<Relationship, String> stateFieldsNames = new HashMap<>();
-
         try {
 
             CtClass ctWrapperClass = createWrapperClass();
@@ -75,8 +69,9 @@ public class StoredProcedureBinding extends EntityBinding {
             if (entity.isAnnotationPresent(DeleteProcedureName.class)) proceduresNames.put(QueryType.delete,
                     ((DeleteProcedureName) entity.getAnnotation(DeleteProcedureName.class)).value());
 
-            String methodName;
-            String fieldName;
+            Field field;
+            Map<QueryType, Integer> order = new HashMap<>();
+            Map<Relationship, String> stateFieldsNames = new HashMap<>();
 
             Field[] fields = entity.getDeclaredFields();
             Method[] methods = entity.getMethods();
@@ -85,28 +80,10 @@ public class StoredProcedureBinding extends EntityBinding {
             int length = 0; //Число полей, помеченных @Column или @ManyToOne
             OrderingType orderingType = OrderingType.unknown;
 
-            for (Method method : methods) {
-
-                fieldName = "";
-                methodName = method.getName();
-
-                if (methodName.indexOf("get") == 0) {
-                    fieldName = methodName.substring(3, 4).toLowerCase() + methodName.substring(4);
-                }
-                if (methodName.indexOf("is") == 0) {
-                    fieldName = methodName.substring(2, 3).toLowerCase() + methodName.substring(3);
-                }
-                if (!fieldName.equals("")) {
-
-                }
-            }
-
             for (int i = 0; i < fields.length; i++) {
 
                 field = fields[i];
                 order.clear();
-
-
 
                 if (field.isAnnotationPresent(Order.class)) {
 
